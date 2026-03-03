@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Squadron Energy brand palette */
+  --navy:       #0B1F3A;
+  --navy-light: #163156;
+  --teal:       #00A878;
+  --teal-light: #00C48C;
+  --teal-pale:  #E6F7F2;
+
+  /* Light theme surfaces */
+  --bg:         #F4F6F9;
+  --surface:    #FFFFFF;
+  --surface2:   #F0F3F7;
+  --border:     #DDE2EA;
+  --border-dark:#C4CDD8;
+
+  /* Text */
+  --text:       #0B1F3A;
+  --text-mid:   #3D5068;
+  --muted:      #7A8FA6;
+
+  /* Accents */
+  --nsw:        #1D6FD4;
+  --vic:        #00A878;
+  --price:      #E07B2A;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono { font-family: 'DM Mono', monospace; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(11,31,58,0.06);
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(11,31,58,0.05);
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--teal), var(--teal-light));
+  opacity: 0.6;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-dark); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* Table */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.data-table th {
+  background: var(--surface2);
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.65rem 1rem;
+  text-align: right;
+  border-bottom: 2px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.data-table th:first-child { text-align: left; }
+.data-table td {
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  font-family: 'DM Mono', monospace;
+  color: var(--text-mid);
+  font-size: 0.78rem;
+}
+.data-table td:first-child { text-align: left; color: var(--muted); }
+.data-table tr:hover td { background: var(--teal-pale); }
+
+/* Fade in */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up   { animation: fadeUp 0.4s ease forwards; }
+.delay-1   { animation-delay: 0.05s; opacity: 0; }
+.delay-2   { animation-delay: 0.10s; opacity: 0; }
+.delay-3   { animation-delay: 0.15s; opacity: 0; }
+.delay-4   { animation-delay: 0.20s; opacity: 0; }
+.delay-5   { animation-delay: 0.25s; opacity: 0; }
