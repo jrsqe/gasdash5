@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Gas Generation Dashboard',
-  description: 'NSW & VIC gas power generation and spot prices',
+  title: 'Squadron Energy — Market Dashboard',
+  description: 'Gas & electricity market intelligence for eastern Australia',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

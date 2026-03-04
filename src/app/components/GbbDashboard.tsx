@@ -1,144 +1,109 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
+import { useGbbData } from './MainDashboard'
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
-const NAVY    = '#0B1F3A'
-const TEAL    = '#00A878'
-const MUTED   = '#7A8FA6'
-const BORDER  = '#DDE2EA'
-const SURFACE  = '#FFFFFF'
-const SURFACE2 = '#F0F3F7'
-const BG       = '#F4F6F9'
-
+// ── Palette ───────────────────────────────────────────────────────────────────
 const PALETTE = [
-  '#1D6FD4','#00A878','#E07B2A','#9B3FCF','#D4281D',
-  '#0891B2','#65A30D','#B45309','#6D28D9','#0E7490',
-  '#4D7C0F','#92400E','#5B21B6','#BE185D','#0369A1',
+  '#00B4A0','#3DDC84','#7B9FF9','#FF6B35','#E8425A',
+  '#00D4FF','#A8E063','#FFB347','#CF9FFF','#FF6B9D',
+  '#4ECDC4','#45B7D1','#96CEB4','#FFEAA7','#DDA0DD',
 ]
-const PIPE_COLOURS: Record<string, string> = {
-  'EGP':     '#1D6FD4', 'MSP':     '#00A878', 'MAPS':    '#E07B2A',
-  'CGP':     '#9B3FCF', 'SWQP':    '#D4281D', 'QGP':     '#0891B2',
-  'RBP':     '#65A30D', 'VTS-LMP': '#B45309', 'VTS-SWP': '#6D28D9',
-  'VTS-VNI': '#0E7490', 'TGP':     '#4D7C0F', 'PCA':     '#92400E',
+const PIPE_COLOURS: Record<string,string> = {
+  EGP:'#7B9FF9', MSP:'#00B4A0', MAPS:'#FF6B35', CGP:'#CF9FFF', SWQP:'#E8425A',
+  QGP:'#00D4FF', RBP:'#A8E063', 'VTS-LMP':'#FFB347', 'VTS-SWP':'#FF6B9D', 'VTS-VNI':'#4ECDC4',
+  TGP:'#96CEB4', PCA:'#FFEAA7',
 }
+const STATE_COLOURS: Record<string,string> = { NSW:'#7B9FF9', VIC:'#00B4A0', SA:'#FF6B35', QLD:'#CF9FFF', TAS:'#E8425A' }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface GbbTimeseries {
+interface GbbData {
   dates: string[]
-  gpgByState:   Record<string, Record<string, (number|null)[]>>
-  prodByState:  Record<string, Record<string, (number|null)[]>>
-  storageByFacility: Record<string, {
-    state: string
-    heldInStorage: (number|null)[]
-    supply: (number|null)[]
-    demand: (number|null)[]
-  }>
-  pipelineFlows: Record<string, { flow: (number|null)[]; direction: string }>
+  gpgByState:   Record<string, Record<string,(number|null)[]>>
+  prodByState:  Record<string, Record<string,(number|null)[]>>
+  storageByFacility: Record<string, { state:string; heldInStorage:(number|null)[]; supply:(number|null)[]; demand:(number|null)[] }>
+  pipelineFlows: Record<string, { flow:(number|null)[]; direction:string }>
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmt1 = (v: number | null | undefined) =>
-  v == null ? '—' : v.toLocaleString('en-AU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-const fmt0 = (v: number | null | undefined) =>
-  v == null ? '—' : v.toLocaleString('en-AU', { maximumFractionDigits: 0 })
+const fmt1 = (v: number|null|undefined) =>
+  v == null ? '—' : v.toLocaleString('en-AU', { minimumFractionDigits:1, maximumFractionDigits:1 })
+const fmt0 = (v: number|null|undefined) =>
+  v == null ? '—' : v.toLocaleString('en-AU', { maximumFractionDigits:0 })
 
-function fmtDateShort(d: string) {
-  const [, mm, dd] = d.split('-')
-  return `${dd}/${mm}`
-}
+function fmtD(d: string) { const [,mm,dd] = d.split('-'); return `${dd}/${mm}` }
 
-// Last non-null value in an array
-function lastVal(arr: (number|null)[]): number | null {
-  for (let i = arr.length - 1; i >= 0; i--) {
-    if (arr[i] != null) return arr[i]
-  }
+function lastVal(arr: (number|null)[]): number|null {
+  for (let i = arr.length-1; i >= 0; i--) if (arr[i] != null) return arr[i]
   return null
 }
 
-// Build recharts rows from date array + series map
-function buildRows(dates: string[], series: Record<string, (number|null)[]>) {
-  return dates.map((d, i) => ({
-    date: fmtDateShort(d),
-    rawDate: d,
-    ...Object.fromEntries(Object.entries(series).map(([k, v]) => [k, v[i] ?? null])),
-  }))
-}
-
-// ── Date range window (same pattern as electricity dashboard) ─────────────────
-type DateRangeOption = 'all' | '14d' | '7d' | '3d'
-const DATE_RANGE_OPTIONS: { value: DateRangeOption; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: '14d', label: '14 days' },
-  { value: '7d',  label: '7 days' },
-  { value: '3d',  label: '3 days' },
+type DateRangeOption = 'all'|'90d'|'30d'|'7d'
+const DATE_RANGE_OPTIONS: {value: DateRangeOption; label: string}[] = [
+  { value:'all',  label:'All'    },
+  { value:'90d',  label:'90 days' },
+  { value:'30d',  label:'30 days' },
+  { value:'7d',   label:'7 days'  },
 ]
 
-function useWindowedDates(dates: string[], dateRange: DateRangeOption) {
+function useWindow(dates: string[], dateRange: DateRangeOption) {
   const windowSize = useMemo(() => {
-    if (dateRange === 'all' || dates.length === 0) return dates.length
-    const days = dateRange === '14d' ? 14 : dateRange === '7d' ? 7 : 3
-    return Math.min(days, dates.length)
+    if (dateRange === 'all' || !dates.length) return dates.length
+    const d = dateRange === '90d' ? 90 : dateRange === '30d' ? 30 : 7
+    return Math.min(d, dates.length)
   }, [dateRange, dates])
 
-  const maxEnd = dates.length - 1
-  const minEnd = Math.max(0, windowSize - 1)
-  const [windowEnd, setWindowEnd] = useState(maxEnd)
-
-  // Reset to latest when range or dates change
+  const [windowEnd, setWindowEnd] = useState(dates.length - 1)
   useEffect(() => { setWindowEnd(dates.length - 1) }, [dateRange, dates])
 
-  const slicedDates = useMemo(() => {
+  const sliced = useMemo(() => {
     if (dateRange === 'all') return dates
-    const start = Math.max(0, windowEnd - windowSize + 1)
-    return dates.slice(start, windowEnd + 1)
+    return dates.slice(Math.max(0, windowEnd - windowSize + 1), windowEnd + 1)
   }, [dates, dateRange, windowSize, windowEnd])
 
   const sliceStart = dateRange === 'all' ? 0 : Math.max(0, windowEnd - windowSize + 1)
-
-  return { slicedDates, sliceStart, windowEnd, setWindowEnd, windowSize, minEnd, maxEnd }
+  return { sliced, sliceStart, windowEnd, setWindowEnd, windowSize }
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function GbbTooltip({ active, payload, label, unit }: any) {
+// ── Shared atoms ──────────────────────────────────────────────────────────────
+function SqTooltip({ active, payload, label, unit }: any) {
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 8,
-      padding: '0.75rem 1rem', fontSize: '0.78rem', fontFamily: 'DM Mono, monospace',
-      minWidth: 200, boxShadow: '0 4px 16px rgba(11,31,58,0.10)',
+      background:'var(--sq-slate-2)', border:'1px solid var(--sq-border-2)',
+      borderRadius:8, padding:'0.65rem 0.9rem',
+      fontFamily:'var(--font-data)', fontSize:'0.75rem',
+      minWidth:190, boxShadow:'0 8px 32px rgba(0,0,0,0.4)',
     }}>
-      <div style={{ color: MUTED, marginBottom: '0.5rem', fontSize: '0.68rem' }}>{label}</div>
+      <div style={{ color:'var(--sq-muted)', marginBottom:'0.4rem', fontSize:'0.62rem', letterSpacing:'0.04em' }}>{label}</div>
       {payload.filter((p: any) => p.value != null).map((p: any) => (
-        <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', gap: '1.5rem', marginBottom: 3 }}>
-          <span style={{ color: p.color ?? p.fill, fontWeight: 500 }}>{p.name}</span>
-          <span style={{ color: NAVY, fontWeight: 600 }}>{fmt1(p.value)} {unit}</span>
+        <div key={p.name} style={{ display:'flex', justifyContent:'space-between', gap:'1.25rem', marginBottom:2 }}>
+          <span style={{ color: p.color ?? p.fill }}>{p.name}</span>
+          <span style={{ color:'var(--sq-text)', fontWeight:600 }}>{fmt1(p.value)} {unit}</span>
         </div>
       ))}
     </div>
   )
 }
 
-function StateTabs({ states, active, onChange }: { states: string[]; active: string; onChange: (s: string) => void }) {
-  const colours: Record<string,string> = { NSW:'#1D6FD4', VIC:'#00A878', SA:'#E07B2A', QLD:'#9B3FCF', TAS:'#D4281D' }
+function StateTabs({ states, active, onChange }: { states:string[]; active:string; onChange:(s:string)=>void }) {
   return (
-    <div style={{ display: 'flex', borderBottom: `1px solid ${BORDER}`, marginBottom: '1.25rem' }}>
+    <div style={{ display:'flex', borderBottom:'1px solid var(--sq-border)', marginBottom:'1rem' }}>
       {states.map(s => {
         const isActive = s === active
-        const colour = colours[s] ?? NAVY
+        const c = STATE_COLOURS[s] ?? 'var(--sq-teal)'
         return (
           <button key={s} onClick={() => onChange(s)} style={{
-            padding: '0.5rem 1rem', border: 'none', background: 'transparent',
-            cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: '0.82rem',
+            padding:'0.45rem 0.85rem', border:'none', background:'transparent',
+            cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.78rem',
             fontWeight: isActive ? 600 : 400,
-            color: isActive ? colour : MUTED,
-            borderBottom: isActive ? `2px solid ${colour}` : '2px solid transparent',
-            marginBottom: -1, transition: 'all 0.15s',
+            color: isActive ? c : 'var(--sq-muted)',
+            borderBottom: isActive ? `2px solid ${c}` : '2px solid transparent',
+            marginBottom:-1, transition:'all 0.15s',
           }}>{s}</button>
         )
       })}
@@ -146,24 +111,41 @@ function StateTabs({ states, active, onChange }: { states: string[]; active: str
   )
 }
 
-function PillGroup<T extends string>({
-  label, options, value, onChange,
-}: {
-  label: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void
+function GroupTabs({ groups, active, onChange }: { groups:string[]; active:string; onChange:(s:string)=>void }) {
+  return (
+    <div style={{ display:'flex', borderBottom:'1px solid var(--sq-border)', marginBottom:'1rem' }}>
+      {groups.map(g => {
+        const isActive = g === active
+        return (
+          <button key={g} onClick={() => onChange(g)} style={{
+            padding:'0.45rem 0.85rem', border:'none', background:'transparent',
+            cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.78rem',
+            fontWeight: isActive ? 600 : 400,
+            color: isActive ? 'var(--sq-teal)' : 'var(--sq-muted)',
+            borderBottom: isActive ? '2px solid var(--sq-teal)' : '2px solid transparent',
+            marginBottom:-1, transition:'all 0.15s',
+          }}>{g}</button>
+        )
+      })}
+    </div>
+  )
+}
+
+function PillGroup<T extends string>({ label, options, value, onChange }: {
+  label?:string; options:{value:T; label:string}[]; value:T; onChange:(v:T)=>void
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-      {label && <span style={{ color: MUTED, fontSize: '0.72rem', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{label}</span>}
-      <div style={{ display: 'flex', background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 8, padding: 2, gap: 2 }}>
+    <div style={{ display:'flex', alignItems:'center', gap:'0.4rem' }}>
+      {label && <span style={{ color:'var(--sq-muted)', fontSize:'0.62rem', fontFamily:'var(--font-data)', whiteSpace:'nowrap', letterSpacing:'0.05em', textTransform:'uppercase' }}>{label}</span>}
+      <div style={{ display:'flex', background:'var(--sq-navy-2)', border:'1px solid var(--sq-border)', borderRadius:8, padding:2, gap:2 }}>
         {options.map(opt => {
           const active = opt.value === value
           return (
             <button key={opt.value} onClick={() => onChange(opt.value)} style={{
-              padding: '0.28rem 0.65rem', borderRadius: 6, border: 'none', cursor: 'pointer',
-              fontFamily: 'Inter, sans-serif', fontSize: '0.75rem',
-              fontWeight: active ? 600 : 400,
-              background: active ? NAVY : 'transparent',
-              color: active ? '#fff' : MUTED, transition: 'all 0.15s',
+              padding:'0.25rem 0.65rem', borderRadius:6, border:'none', cursor:'pointer',
+              fontFamily:'var(--font-ui)', fontSize:'0.72rem', fontWeight: active ? 600 : 400,
+              background: active ? 'var(--sq-teal)' : 'transparent',
+              color: active ? 'var(--sq-navy)' : 'var(--sq-muted)', transition:'all 0.15s',
             }}>{opt.label}</button>
           )
         })}
@@ -172,250 +154,141 @@ function PillGroup<T extends string>({
   )
 }
 
-// Slider to scroll the view window — identical pattern to electricity dashboard
-function WindowSlider({
-  totalRows, windowSize, windowEnd, onChange,
-  firstLabel, lastLabel, windowStartLabel, windowEndLabel,
-}: {
-  totalRows: number; windowSize: number; windowEnd: number; onChange: (n: number) => void
-  firstLabel: string; lastLabel: string; windowStartLabel: string; windowEndLabel: string
-}) {
+function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, lastLabel, windowStartLabel, windowEndLabel }: any) {
   if (totalRows === 0 || windowSize >= totalRows) return null
-  const min = windowSize - 1
-  const max = totalRows - 1
+  const min = windowSize-1, max = totalRows-1
   return (
-    <div style={{ marginTop: '1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '0.68rem', color: MUTED }}>{firstLabel}</span>
-        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '0.72rem', color: NAVY, background: SURFACE2, border: `1px solid ${BORDER}`, padding: '2px 10px', borderRadius: 6, fontWeight: 500 }}>
+    <div style={{ marginTop:'0.85rem' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.3rem' }}>
+        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--sq-muted)' }}>{firstLabel}</span>
+        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--sq-teal)', background:'var(--sq-navy-2)', border:'1px solid var(--sq-border)', padding:'1px 7px', borderRadius:4, fontWeight:600 }}>
           {windowStartLabel} → {windowEndLabel}
         </span>
-        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '0.68rem', color: MUTED }}>{lastLabel}</span>
+        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--sq-muted)' }}>{lastLabel}</span>
       </div>
-      <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'center' }}>
-        <div style={{ position: 'absolute', left: 0, right: 0, height: 6, background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 3 }} />
+      <div style={{ position:'relative', height:22, display:'flex', alignItems:'center' }}>
+        <div style={{ position:'absolute', left:0, right:0, height:4, background:'var(--sq-navy-2)', border:'1px solid var(--sq-border)', borderRadius:2 }} />
         <div style={{
-          position: 'absolute',
-          left:  `${((windowEnd - windowSize + 1) / (totalRows - 1)) * 100}%`,
-          right: `${((totalRows - 1 - windowEnd) / (totalRows - 1)) * 100}%`,
-          height: 6, background: TEAL, borderRadius: 3, opacity: 0.7, transition: 'left 0.1s, right 0.1s',
+          position:'absolute',
+          left: `${((windowEnd-windowSize+1)/(totalRows-1))*100}%`,
+          right:`${((totalRows-1-windowEnd)/(totalRows-1))*100}%`,
+          height:4, background:'var(--sq-teal)', borderRadius:2, opacity:0.8, transition:'left 0.08s, right 0.08s',
         }} />
         <input type="range" min={min} max={max} value={windowEnd} onChange={e => onChange(Number(e.target.value))}
-          style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, cursor: 'pointer', height: 28, margin: 0 }}
-        />
+          style={{ position:'absolute', left:0, right:0, width:'100%', opacity:0, cursor:'pointer', height:22, margin:0 }} />
         <div style={{
-          position: 'absolute', left: `calc(${((windowEnd - min) / (max - min)) * 100}% - 8px)`,
-          width: 16, height: 16, borderRadius: '50%', background: NAVY, border: `2px solid ${TEAL}`,
-          boxShadow: '0 1px 4px rgba(11,31,58,0.2)', pointerEvents: 'none', transition: 'left 0.1s',
+          position:'absolute', left:`calc(${((windowEnd-min)/(max-min))*100}% - 6px)`,
+          width:12, height:12, borderRadius:'50%',
+          background:'var(--sq-navy)', border:'2px solid var(--sq-teal)',
+          boxShadow:'0 0 6px var(--sq-teal-glow)', pointerEvents:'none', transition:'left 0.08s',
         }} />
-      </div>
-      <div style={{ textAlign: 'center', fontFamily: 'DM Mono, monospace', fontSize: '0.65rem', color: MUTED, marginTop: '0.25rem' }}>
-        drag to scroll
       </div>
     </div>
   )
 }
 
-// Range controls + optional slider, rendered below a chart
-function ChartRangeControls({
-  dates, dateRange, onDateRangeChange, windowEnd, setWindowEnd, windowSize, sliceStart, slicedDates,
-}: {
-  dates: string[]; dateRange: DateRangeOption; onDateRangeChange: (v: DateRangeOption) => void
-  windowEnd: number; setWindowEnd: (n: number) => void; windowSize: number
-  sliceStart: number; slicedDates: string[]
-}) {
-  const fmtLabel = (d: string) => { const [,mm,dd] = d.split('-'); return `${dd}/${mm}` }
+function RangeControls({ dates, dateRange, onChange, sliced, windowEnd, setWindowEnd, windowSize, sliceStart }: any) {
+  const fmtL = (d: string) => { const [,mm,dd] = d.split('-'); return `${dd}/${mm}` }
   return (
-    <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: `1px solid ${BORDER}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <PillGroup label="View" options={DATE_RANGE_OPTIONS} value={dateRange} onChange={onDateRangeChange} />
+    <div style={{ marginTop:'1rem', paddingTop:'1rem', borderTop:'1px solid var(--sq-border)' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem' }}>
+        <PillGroup options={DATE_RANGE_OPTIONS} value={dateRange} onChange={onChange} label="View" />
         {dateRange !== 'all' && (
-          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: '0.68rem', color: MUTED }}>
-            {slicedDates.length} of {dates.length} days
+          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--sq-muted)' }}>
+            {sliced.length} of {dates.length} days
           </span>
         )}
       </div>
       {dateRange !== 'all' && dates.length > windowSize && (
         <WindowSlider
           totalRows={dates.length} windowSize={windowSize} windowEnd={windowEnd} onChange={setWindowEnd}
-          firstLabel={dates.length > 0 ? fmtLabel(dates[0]) : ''}
-          lastLabel={dates.length > 0 ? fmtLabel(dates[dates.length - 1]) : ''}
-          windowStartLabel={slicedDates.length > 0 ? fmtLabel(slicedDates[0]) : ''}
-          windowEndLabel={slicedDates.length > 0 ? fmtLabel(slicedDates[slicedDates.length - 1]) : ''}
+          firstLabel={dates.length > 0 ? fmtL(dates[0]) : ''}
+          lastLabel={dates.length > 0 ? fmtL(dates[dates.length-1]) : ''}
+          windowStartLabel={sliced.length > 0 ? fmtL(sliced[0]) : ''}
+          windowEndLabel={sliced.length > 0 ? fmtL(sliced[sliced.length-1]) : ''}
         />
       )}
     </div>
   )
 }
 
+const XAXIS_PROPS = {
+  tick:{ fill:'var(--sq-muted)', fontSize:9, fontFamily:'var(--font-data)' },
+  tickLine:false, axisLine:{ stroke:'var(--sq-border)' }, interval:'preserveStartEnd' as const,
+}
+const YAXIS_PROPS = {
+  tick:{ fill:'var(--sq-muted)', fontSize:9, fontFamily:'var(--font-data)' },
+  tickLine:false, axisLine:false, width:52,
+}
+const LEGEND_STYLE = { fontSize:'0.65rem', fontFamily:'var(--font-data)', paddingTop:'0.4rem', color:'var(--sq-text-2)' }
+const CHART_MARGIN = { top:4, right:12, left:0, bottom:4 }
+
 // ── GPG Panel ─────────────────────────────────────────────────────────────────
-function GpgPanel({ dates, gpgByState }: { dates: string[]; gpgByState: Record<string, Record<string, (number|null)[]>> }) {
+function GpgPanel({ dates, gpgByState }: { dates:string[]; gpgByState: Record<string, Record<string,(number|null)[]>> }) {
   const states = Object.keys(gpgByState).sort()
-  const [activeState, setActiveState] = useState(states[0] ?? 'NSW')
-  const [dateRange, setDateRange] = useState<DateRangeOption>('all')
-  const { slicedDates, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindowedDates(dates, dateRange)
+  const [state, setState]   = useState(states[0] ?? 'NSW')
+  const [range, setRange]   = useState<DateRangeOption>('all')
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(dates, range)
 
-  useEffect(() => { if (!states.includes(activeState)) setActiveState(states[0] ?? '') }, [states])
+  useEffect(() => { if (!states.includes(state)) setState(states[0] ?? '') }, [states])
 
-  const facilities = Object.keys(gpgByState[activeState] ?? {})
-  const series = gpgByState[activeState] ?? {}
+  const facilities = Object.keys(gpgByState[state] ?? {})
+  const series     = gpgByState[state] ?? {}
 
-  const rows = slicedDates.map((d, i) => {
-    const gi = sliceStart + i
-    return { date: fmtDateShort(d), ...Object.fromEntries(facilities.map(f => [f, series[f]?.[gi] ?? null])) }
+  const rows = sliced.map((d,i) => {
+    const gi = sliceStart+i
+    return { date: fmtD(d), ...Object.fromEntries(facilities.map(f => [f, series[f]?.[gi] ?? null])) }
   })
 
   return (
-    <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', marginBottom: '1.25rem' }}>
-        <h3 style={{ fontWeight: 600, fontSize: '0.95rem', color: NAVY, margin: 0 }}>GPG Gas Demand</h3>
-        <span style={{ color: MUTED, fontFamily: 'DM Mono, monospace', fontSize: '0.7rem' }}>TJ/day</span>
+    <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
+      <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem', marginBottom:'1rem' }}>
+        <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>GPG Gas Demand</h3>
+        <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
       </div>
-      {states.length > 1 && <StateTabs states={states} active={activeState} onChange={setActiveState} />}
-      <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={rows} margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-          <XAxis dataKey="date" tick={{ fill: MUTED, fontSize: 10, fontFamily: 'DM Mono, monospace' }} tickLine={false} axisLine={{ stroke: BORDER }} />
-          <YAxis tick={{ fill: MUTED, fontSize: 10, fontFamily: 'DM Mono, monospace' }} tickLine={false} axisLine={false} width={48} />
-          <Tooltip content={<GbbTooltip unit="TJ" />} />
-          <Legend wrapperStyle={{ fontSize: '0.72rem', fontFamily: 'DM Mono, monospace', paddingTop: '0.5rem' }} />
-          {facilities.map((f, i) => (
-            <Bar key={f} dataKey={f} stackId="gpg" fill={PALETTE[i % PALETTE.length]}
-              radius={i === facilities.length - 1 ? [2,2,0,0] : [0,0,0,0]} />
+      {states.length > 1 && <StateTabs states={states} active={state} onChange={setState} />}
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={rows} margin={CHART_MARGIN}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+          <XAxis dataKey="date" {...XAXIS_PROPS} />
+          <YAxis {...YAXIS_PROPS} />
+          <Tooltip content={<SqTooltip unit="TJ" />} />
+          <Legend wrapperStyle={LEGEND_STYLE} />
+          {facilities.map((f,i) => (
+            <Bar key={f} dataKey={f} stackId="g" fill={PALETTE[i%PALETTE.length]}
+              radius={i === facilities.length-1 ? [2,2,0,0] : [0,0,0,0]} />
           ))}
         </BarChart>
       </ResponsiveContainer>
-      <ChartRangeControls dates={dates} dateRange={dateRange} onDateRangeChange={(v) => { setDateRange(v) }}
-        windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize}
-        sliceStart={sliceStart} slicedDates={slicedDates} />
-    </div>
-  )
-}
-
-// ── Production Panel ──────────────────────────────────────────────────────────
-function ProductionPanel({ dates, prodByState }: { dates: string[]; prodByState: Record<string, Record<string, (number|null)[]>> }) {
-  const states = Object.keys(prodByState).sort()
-  const [activeState, setActiveState] = useState(states[0] ?? 'VIC')
-  const [dateRange, setDateRange] = useState<DateRangeOption>('all')
-  const { slicedDates, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindowedDates(dates, dateRange)
-  const [showFilter, setShowFilter] = useState(false)
-
-  useEffect(() => { if (!states.includes(activeState)) setActiveState(states[0] ?? '') }, [states])
-
-  const allFacilities = Object.keys(prodByState[activeState] ?? {})
-  const [selectedFacilities, setSelectedFacilities] = useState<Set<string>>(new Set())
-
-  // When state changes, reset selection to all
-  useEffect(() => { setSelectedFacilities(new Set()) }, [activeState])
-
-  const activeFacilities = selectedFacilities.size > 0 ? allFacilities.filter(f => selectedFacilities.has(f)) : allFacilities
-  const series = prodByState[activeState] ?? {}
-
-  const rows = slicedDates.map((d, i) => {
-    const gi = sliceStart + i
-    return { date: fmtDateShort(d), ...Object.fromEntries(activeFacilities.map(f => [f, series[f]?.[gi] ?? null])) }
-  })
-
-  const toggleFacility = (f: string) => {
-    setSelectedFacilities(prev => {
-      const next = new Set(prev)
-      next.has(f) ? next.delete(f) : next.add(f)
-      return next
-    })
-  }
-  const selectAll  = () => setSelectedFacilities(new Set())
-  const selectNone = () => setSelectedFacilities(new Set(allFacilities))  // select all = deselect all (show none), invert
-
-  return (
-    <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-          <h3 style={{ fontWeight: 600, fontSize: '0.95rem', color: NAVY, margin: 0 }}>Gas Production</h3>
-          <span style={{ color: MUTED, fontFamily: 'DM Mono, monospace', fontSize: '0.7rem' }}>TJ/day</span>
-        </div>
-        <button onClick={() => setShowFilter(v => !v)} style={{
-          padding: '0.28rem 0.75rem', borderRadius: 6, border: `1px solid ${BORDER}`,
-          background: showFilter ? NAVY : SURFACE2, color: showFilter ? '#fff' : MUTED,
-          cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: '0.75rem', fontWeight: 500,
-        }}>
-          {selectedFacilities.size > 0 ? `${activeFacilities.length} / ${allFacilities.length} facilities` : 'Filter facilities'}
-        </button>
-      </div>
-
-      {showFilter && (
-        <div style={{
-          background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 8,
-          padding: '0.75rem', marginBottom: '1rem',
-        }}>
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <button onClick={selectAll} style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 4, border: `1px solid ${BORDER}`, background: SURFACE, color: MUTED, cursor: 'pointer' }}>All</button>
-            <button onClick={selectNone} style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 4, border: `1px solid ${BORDER}`, background: SURFACE, color: MUTED, cursor: 'pointer' }}>None</button>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: 160, overflowY: 'auto' }}>
-            {allFacilities.map((f, i) => {
-              const isActive = selectedFacilities.size === 0 || selectedFacilities.has(f)
-              return (
-                <button key={f} onClick={() => toggleFacility(f)} style={{
-                  padding: '3px 10px', borderRadius: 20, border: 'none', cursor: 'pointer',
-                  fontFamily: 'DM Mono, monospace', fontSize: '0.7rem', fontWeight: isActive ? 600 : 400,
-                  background: isActive ? PALETTE[i % PALETTE.length] : BORDER,
-                  color: isActive ? '#fff' : MUTED, transition: 'all 0.12s',
-                }}>{f}</button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {states.length > 1 && <StateTabs states={states} active={activeState} onChange={setActiveState} />}
-
-      <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={rows} margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-          <XAxis dataKey="date" tick={{ fill: MUTED, fontSize: 10, fontFamily: 'DM Mono, monospace' }} tickLine={false} axisLine={{ stroke: BORDER }} interval="preserveStartEnd" />
-          <YAxis tick={{ fill: MUTED, fontSize: 10, fontFamily: 'DM Mono, monospace' }} tickLine={false} axisLine={false} width={48} />
-          <Tooltip content={<GbbTooltip unit="TJ" />} />
-          <Legend wrapperStyle={{ fontSize: '0.72rem', fontFamily: 'DM Mono, monospace', paddingTop: '0.5rem' }} />
-          {activeFacilities.map((f, i) => (
-            <Line key={f} type="monotone" dataKey={f}
-              stroke={PALETTE[allFacilities.indexOf(f) % PALETTE.length]}
-              strokeWidth={1.75} dot={false} connectNulls activeDot={{ r: 3, strokeWidth: 0 }} />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-      <ChartRangeControls dates={dates} dateRange={dateRange} onDateRangeChange={setDateRange}
-        windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize}
-        sliceStart={sliceStart} slicedDates={slicedDates} />
+      <RangeControls dates={dates} dateRange={range} onChange={setRange}
+        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
     </div>
   )
 }
 
 // ── Storage Panel ─────────────────────────────────────────────────────────────
 function StoragePanel({ dates, storageByFacility }: {
-  dates: string[]
-  storageByFacility: Record<string, { state: string; heldInStorage: (number|null)[]; supply: (number|null)[]; demand: (number|null)[] }>
+  dates:string[];
+  storageByFacility: Record<string,{ state:string; heldInStorage:(number|null)[]; supply:(number|null)[]; demand:(number|null)[] }>
 }) {
-  const facilities = Object.keys(storageByFacility).sort()
-  const stateOf    = (f: string) => storageByFacility[f]?.state ?? ''
+  const facilities  = Object.keys(storageByFacility).sort()
+  const stateOf     = (f:string) => storageByFacility[f]?.state ?? ''
   const stateGroups = ['NSW','VIC','SA'].filter(s => facilities.some(f => stateOf(f) === s))
-  const [activeState,  setActiveState]  = useState(stateGroups[0] ?? 'VIC')
-  const [activeMetric, setActiveMetric] = useState<'level'|'flow'>('level')
-  const [dateRange,    setDateRange]    = useState<DateRangeOption>('all')
-  const { slicedDates, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindowedDates(dates, dateRange)
+  const [state,  setState]  = useState(stateGroups[0] ?? 'VIC')
+  const [metric, setMetric] = useState<'level'|'flow'>('level')
+  const [range,  setRange]  = useState<DateRangeOption>('all')
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(dates, range)
 
-  const stateFacilities = facilities.filter(f => stateOf(f) === activeState)
+  const sf = facilities.filter(f => stateOf(f) === state)
 
-  const levelRows = slicedDates.map((d, i) => {
-    const gi = sliceStart + i
-    return {
-      date: fmtDateShort(d),
-      ...Object.fromEntries(stateFacilities.map(f => [f, storageByFacility[f].heldInStorage[gi] ?? null]))
-    }
+  const levelRows = sliced.map((d,i) => {
+    const gi = sliceStart+i
+    return { date:fmtD(d), ...Object.fromEntries(sf.map(f => [f, storageByFacility[f].heldInStorage[gi] ?? null])) }
   })
-  const flowRows = slicedDates.map((d, i) => {
-    const gi = sliceStart + i
-    const row: Record<string,any> = { date: fmtDateShort(d) }
-    stateFacilities.forEach(f => {
+  const flowRows = sliced.map((d,i) => {
+    const gi = sliceStart+i
+    const row: Record<string,any> = { date:fmtD(d) }
+    sf.forEach(f => {
       row[`${f} inject`]    = storageByFacility[f].demand[gi]  ?? null
       row[`${f} withdraw`]  = storageByFacility[f].supply[gi]  ?? null
     })
@@ -423,123 +296,191 @@ function StoragePanel({ dates, storageByFacility }: {
   })
 
   return (
-    <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-          <h3 style={{ fontWeight: 600, fontSize: '0.95rem', color: NAVY, margin: 0 }}>Gas Storage</h3>
-          <span style={{ color: MUTED, fontFamily: 'DM Mono, monospace', fontSize: '0.7rem' }}>TJ</span>
+    <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
+        <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
+          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Storage</h3>
+          <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ</span>
         </div>
-        <div style={{ display: 'flex', background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 8, padding: 2, gap: 2 }}>
-          {(['level','flow'] as const).map(m => (
-            <button key={m} onClick={() => setActiveMetric(m)} style={{
-              padding: '0.25rem 0.75rem', borderRadius: 6, border: 'none', cursor: 'pointer',
-              fontFamily: 'Inter, sans-serif', fontSize: '0.75rem', fontWeight: activeMetric === m ? 600 : 400,
-              background: activeMetric === m ? NAVY : 'transparent',
-              color: activeMetric === m ? '#fff' : MUTED,
-            }}>{m === 'level' ? 'Storage Level' : 'Inject / Withdraw'}</button>
-          ))}
-        </div>
+        <PillGroup
+          options={[{value:'level',label:'Level'},{value:'flow',label:'Inject/Withdraw'}] as {value:'level'|'flow';label:string}[]}
+          value={metric} onChange={setMetric} />
       </div>
-
-      {stateGroups.length > 1 && <StateTabs states={stateGroups} active={activeState} onChange={setActiveState} />}
-
-      {activeMetric === 'level' ? (
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={levelRows} margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-            <XAxis dataKey="date" tick={{ fill: MUTED, fontSize: 10, fontFamily: 'DM Mono, monospace' }} tickLine={false} axisLine={{ stroke: BORDER }} interval="preserveStartEnd" />
-            <YAxis tick={{ fill: MUTED, fontSize: 10, fontFamily: 'DM Mono, monospace' }} tickLine={false} axisLine={false} width={56} tickFormatter={v => fmt0(v)} />
-            <Tooltip content={<GbbTooltip unit="TJ" />} />
-            <Legend wrapperStyle={{ fontSize: '0.72rem', fontFamily: 'DM Mono, monospace', paddingTop: '0.5rem' }} />
-            {stateFacilities.map((f, i) => (
-              <Line key={f} type="monotone" dataKey={f} stroke={PALETTE[i % PALETTE.length]}
-                strokeWidth={2} dot={false} connectNulls activeDot={{ r: 3, strokeWidth: 0 }} />
+      {stateGroups.length > 1 && <StateTabs states={stateGroups} active={state} onChange={setState} />}
+      {metric === 'level' ? (
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={levelRows} margin={CHART_MARGIN}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+            <XAxis dataKey="date" {...XAXIS_PROPS} />
+            <YAxis {...YAXIS_PROPS} tickFormatter={v => fmt0(v)} />
+            <Tooltip content={<SqTooltip unit="TJ" />} />
+            <Legend wrapperStyle={LEGEND_STYLE} />
+            {sf.map((f,i) => (
+              <Line key={f} type="monotone" dataKey={f} stroke={PALETTE[i%PALETTE.length]}
+                strokeWidth={2} dot={false} connectNulls activeDot={{r:3,strokeWidth:0}} />
             ))}
           </LineChart>
         </ResponsiveContainer>
       ) : (
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={flowRows} margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-            <XAxis dataKey="date" tick={{ fill: MUTED, fontSize: 10, fontFamily: 'DM Mono, monospace' }} tickLine={false} axisLine={{ stroke: BORDER }} />
-            <YAxis tick={{ fill: MUTED, fontSize: 10, fontFamily: 'DM Mono, monospace' }} tickLine={false} axisLine={false} width={48} />
-            <ReferenceLine y={0} stroke={BORDER} />
-            <Tooltip content={<GbbTooltip unit="TJ" />} />
-            <Legend wrapperStyle={{ fontSize: '0.72rem', fontFamily: 'DM Mono, monospace', paddingTop: '0.5rem' }} />
-            {stateFacilities.flatMap((f, i) => [
-              <Bar key={`${f}-in`}  dataKey={`${f} inject`}   fill={PALETTE[i % PALETTE.length]}       radius={[2,2,0,0]} />,
-              <Bar key={`${f}-out`} dataKey={`${f} withdraw`} fill={PALETTE[(i+5) % PALETTE.length]}   radius={[2,2,0,0]} />,
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={flowRows} margin={CHART_MARGIN}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+            <XAxis dataKey="date" {...XAXIS_PROPS} />
+            <YAxis {...YAXIS_PROPS} />
+            <ReferenceLine y={0} stroke="var(--sq-border-2)" />
+            <Tooltip content={<SqTooltip unit="TJ" />} />
+            <Legend wrapperStyle={LEGEND_STYLE} />
+            {sf.flatMap((f,i) => [
+              <Bar key={`${f}-in`}  dataKey={`${f} inject`}   fill={PALETTE[i%PALETTE.length]}     radius={[2,2,0,0]} />,
+              <Bar key={`${f}-out`} dataKey={`${f} withdraw`} fill={PALETTE[(i+5)%PALETTE.length]} radius={[2,2,0,0]} />,
             ])}
           </BarChart>
         </ResponsiveContainer>
       )}
-      <ChartRangeControls dates={dates} dateRange={dateRange} onDateRangeChange={setDateRange}
-        windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize}
-        sliceStart={sliceStart} slicedDates={slicedDates} />
+      <RangeControls dates={dates} dateRange={range} onChange={setRange}
+        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
+    </div>
+  )
+}
+
+// ── Production Panel ──────────────────────────────────────────────────────────
+function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:Record<string,Record<string,(number|null)[]>> }) {
+  const states = Object.keys(prodByState).sort()
+  const [state,  setState]  = useState(states[0] ?? 'VIC')
+  const [range,  setRange]  = useState<DateRangeOption>('all')
+  const [showFilter, setShowFilter] = useState(false)
+  const [selected, setSelected]     = useState<Set<string>>(new Set())
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(dates, range)
+
+  useEffect(() => { if (!states.includes(state)) setState(states[0] ?? '') }, [states])
+  useEffect(() => { setSelected(new Set()) }, [state])
+
+  const allFacilities = Object.keys(prodByState[state] ?? {})
+  const active = selected.size > 0 ? allFacilities.filter(f => selected.has(f)) : allFacilities
+  const series = prodByState[state] ?? {}
+
+  const rows = sliced.map((d,i) => {
+    const gi = sliceStart+i
+    return { date:fmtD(d), ...Object.fromEntries(active.map(f => [f, series[f]?.[gi] ?? null])) }
+  })
+
+  const toggle = (f:string) => setSelected(prev => { const n = new Set(prev); n.has(f) ? n.delete(f) : n.add(f); return n })
+
+  return (
+    <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
+        <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
+          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Production</h3>
+          <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
+        </div>
+        <button onClick={() => setShowFilter(v => !v)} style={{
+          padding:'0.25rem 0.65rem', borderRadius:6,
+          border: `1px solid ${showFilter ? 'var(--sq-teal)' : 'var(--sq-border)'}`,
+          background: showFilter ? 'var(--sq-teal-glow)' : 'transparent',
+          color: showFilter ? 'var(--sq-teal)' : 'var(--sq-muted)',
+          cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.72rem', fontWeight:500,
+        }}>
+          {selected.size > 0 ? `${active.length}/${allFacilities.length} shown` : 'Filter'}
+        </button>
+      </div>
+
+      {showFilter && (
+        <div style={{ background:'var(--sq-navy-2)', border:'1px solid var(--sq-border)', borderRadius:8, padding:'0.65rem', marginBottom:'0.85rem' }}>
+          <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.5rem' }}>
+            <button onClick={() => setSelected(new Set())} style={{ fontSize:'0.65rem', padding:'2px 8px', borderRadius:4, border:'1px solid var(--sq-border)', background:'transparent', color:'var(--sq-teal)', cursor:'pointer' }}>All</button>
+            <button onClick={() => setSelected(new Set(allFacilities))} style={{ fontSize:'0.65rem', padding:'2px 8px', borderRadius:4, border:'1px solid var(--sq-border)', background:'transparent', color:'var(--sq-muted)', cursor:'pointer' }}>None</button>
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:'0.35rem', maxHeight:140, overflowY:'auto' }}>
+            {allFacilities.map((f,i) => {
+              const on = selected.size === 0 || selected.has(f)
+              return (
+                <button key={f} onClick={() => toggle(f)} style={{
+                  padding:'2px 9px', borderRadius:20, border:'none', cursor:'pointer',
+                  fontFamily:'var(--font-data)', fontSize:'0.65rem', fontWeight: on ? 600 : 400,
+                  background: on ? PALETTE[i%PALETTE.length] : 'var(--sq-border)',
+                  color: on ? 'var(--sq-navy)' : 'var(--sq-muted)', transition:'all 0.1s',
+                }}>{f}</button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {states.length > 1 && <StateTabs states={states} active={state} onChange={setState} />}
+      <ResponsiveContainer width="100%" height={240}>
+        <LineChart data={rows} margin={CHART_MARGIN}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+          <XAxis dataKey="date" {...XAXIS_PROPS} />
+          <YAxis {...YAXIS_PROPS} />
+          <Tooltip content={<SqTooltip unit="TJ" />} />
+          <Legend wrapperStyle={LEGEND_STYLE} />
+          {active.map(f => (
+            <Line key={f} type="monotone" dataKey={f}
+              stroke={PALETTE[allFacilities.indexOf(f) % PALETTE.length]}
+              strokeWidth={1.5} dot={false} connectNulls activeDot={{r:3,strokeWidth:0}} />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+      <RangeControls dates={dates} dateRange={range} onChange={setRange}
+        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
     </div>
   )
 }
 
 // ── Pipeline Panel ────────────────────────────────────────────────────────────
 function PipelinePanel({ dates, pipelineFlows }: {
-  dates: string[]
-  pipelineFlows: Record<string, { flow: (number|null)[]; direction: string }>
+  dates:string[];
+  pipelineFlows: Record<string,{ flow:(number|null)[]; direction:string }>
 }) {
   const pipelines = Object.keys(pipelineFlows).sort()
   const groups = [
-    { label: 'Interconnectors', pipes: pipelines.filter(p => ['EGP','MSP','MAPS','TGP','PCA'].includes(p)) },
-    { label: 'VTS',             pipes: pipelines.filter(p => p.startsWith('VTS')) },
-    { label: 'Queensland',      pipes: pipelines.filter(p => ['CGP','SWQP','QGP','RBP'].includes(p)) },
+    { label:'Interconnectors', pipes: pipelines.filter(p => ['EGP','MSP','MAPS','TGP','PCA'].includes(p)) },
+    { label:'VTS',             pipes: pipelines.filter(p => p.startsWith('VTS')) },
+    { label:'Queensland',      pipes: pipelines.filter(p => ['CGP','SWQP','QGP','RBP'].includes(p)) },
   ].filter(g => g.pipes.length > 0)
 
   const [activeGroup, setActiveGroup] = useState(groups[0]?.label ?? '')
-  const [dateRange,   setDateRange]   = useState<DateRangeOption>('all')
-  const { slicedDates, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindowedDates(dates, dateRange)
+  const [range, setRange] = useState<DateRangeOption>('all')
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(dates, range)
 
   const activePipes = groups.find(g => g.label === activeGroup)?.pipes ?? []
 
-  const chartRows = slicedDates.map((d, i) => {
-    const gi = sliceStart + i
-    return { date: fmtDateShort(d), ...Object.fromEntries(activePipes.map(p => [p, pipelineFlows[p]?.flow[gi] ?? null])) }
+  const chartRows = sliced.map((d,i) => {
+    const gi = sliceStart+i
+    return { date:fmtD(d), ...Object.fromEntries(activePipes.map(p => [p, pipelineFlows[p]?.flow[gi] ?? null])) }
   })
 
-  // Latest values for summary table (all pipelines, not just current group)
-  const latestByPipeline = useMemo(() =>
-    Object.fromEntries(pipelines.map(p => [p, lastVal(pipelineFlows[p]?.flow ?? [])])),
-    [pipelines, pipelineFlows]
-  )
+  const latest = Object.fromEntries(pipelines.map(p => [p, lastVal(pipelineFlows[p]?.flow ?? [])]))
 
   return (
-    <div className="card" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', marginBottom: '1.25rem' }}>
-        <h3 style={{ fontWeight: 600, fontSize: '0.95rem', color: NAVY, margin: 0 }}>Pipeline Flows</h3>
-        <span style={{ color: MUTED, fontFamily: 'DM Mono, monospace', fontSize: '0.7rem' }}>TJ/day · GBB system</span>
+    <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
+      <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem', marginBottom:'1.25rem' }}>
+        <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Pipeline Flows</h3>
+        <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day · GBB</span>
       </div>
 
-      {/* Most recent flows summary table */}
-      <div style={{ marginBottom: '1.5rem', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'DM Mono, monospace', fontSize: '0.75rem' }}>
-          <thead>
-            <tr style={{ borderBottom: `2px solid ${BORDER}` }}>
-              <th style={{ textAlign: 'left', padding: '0.4rem 0.75rem', color: MUTED, fontWeight: 500 }}>Pipeline</th>
-              <th style={{ textAlign: 'right', padding: '0.4rem 0.75rem', color: MUTED, fontWeight: 500 }}>Flow (TJ/day)</th>
-              <th style={{ textAlign: 'left', padding: '0.4rem 0.75rem', color: MUTED, fontWeight: 500 }}>Direction</th>
-            </tr>
-          </thead>
+      {/* Summary table */}
+      <div style={{ marginBottom:'1.25rem', overflowX:'auto' }}>
+        <table className="sq-table">
+          <thead><tr>
+            <th>Pipeline</th>
+            <th style={{textAlign:'right'}}>Flow (TJ/day)</th>
+            <th>Direction</th>
+          </tr></thead>
           <tbody>
-            {pipelines.map((p, i) => {
-              const val = latestByPipeline[p]
-              const dir = pipelineFlows[p]?.direction ?? '—'
+            {pipelines.map(p => {
+              const val = latest[p]
+              const colour = PIPE_COLOURS[p] ?? 'var(--sq-teal)'
               return (
-                <tr key={p} style={{ borderBottom: `1px solid ${BORDER}`, background: i % 2 === 0 ? 'transparent' : SURFACE2 }}>
-                  <td style={{ padding: '0.45rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: PIPE_COLOURS[p] ?? NAVY, flexShrink: 0 }} />
-                    <span style={{ color: NAVY, fontWeight: 600 }}>{p}</span>
+                <tr key={p}>
+                  <td style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+                    <div style={{ width:7, height:7, borderRadius:'50%', background:colour, boxShadow:`0 0 4px ${colour}`, flexShrink:0 }} />
+                    <span style={{ fontWeight:600, color:'var(--sq-text)' }}>{p}</span>
                   </td>
-                  <td style={{ padding: '0.45rem 0.75rem', textAlign: 'right', color: NAVY, fontWeight: 700 }}>
-                    {val != null ? val.toLocaleString('en-AU', { maximumFractionDigits: 1 }) : '—'}
+                  <td style={{ textAlign:'right', fontWeight:700, color: val != null ? 'var(--sq-teal)' : 'var(--sq-muted)' }}>
+                    {val != null ? val.toLocaleString('en-AU',{maximumFractionDigits:1}) : '—'}
                   </td>
-                  <td style={{ padding: '0.45rem 0.75rem', color: MUTED }}>→ {dir}</td>
+                  <td style={{ color:'var(--sq-text-2)' }}>→ {pipelineFlows[p]?.direction ?? '—'}</td>
                 </tr>
               )
             })}
@@ -547,67 +488,63 @@ function PipelinePanel({ dates, pipelineFlows }: {
         </table>
       </div>
 
-      {/* Direction legend for active group */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+      <GroupTabs groups={groups.map(g => g.label)} active={activeGroup} onChange={setActiveGroup} />
+
+      {/* Direction badges */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'0.35rem', marginBottom:'0.85rem' }}>
         {activePipes.map(p => (
           <div key={p} style={{
-            display: 'flex', alignItems: 'center', gap: '0.35rem',
-            background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '2px 8px',
-            fontFamily: 'DM Mono, monospace', fontSize: '0.68rem',
+            display:'flex', alignItems:'center', gap:'0.3rem',
+            background:'var(--sq-navy-2)', border:`1px solid ${PIPE_COLOURS[p] ?? 'var(--sq-border)'}`,
+            borderRadius:5, padding:'2px 8px',
+            fontFamily:'var(--font-data)', fontSize:'0.65rem',
           }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: PIPE_COLOURS[p] ?? NAVY }} />
-            <span style={{ color: NAVY, fontWeight: 600 }}>{p}</span>
-            <span style={{ color: MUTED }}>→ {pipelineFlows[p]?.direction}</span>
+            <div style={{ width:6, height:6, borderRadius:'50%', background:PIPE_COLOURS[p] ?? 'var(--sq-teal)' }} />
+            <span style={{ color:'var(--sq-text)', fontWeight:600 }}>{p}</span>
+            <span style={{ color:'var(--sq-muted)' }}>→ {pipelineFlows[p]?.direction}</span>
           </div>
         ))}
       </div>
 
-      <StateTabs states={groups.map(g => g.label)} active={activeGroup} onChange={setActiveGroup} />
-
-      <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={chartRows} margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-          <XAxis dataKey="date" tick={{ fill: MUTED, fontSize: 10, fontFamily: 'DM Mono, monospace' }} tickLine={false} axisLine={{ stroke: BORDER }} interval="preserveStartEnd" />
-          <YAxis tick={{ fill: MUTED, fontSize: 10, fontFamily: 'DM Mono, monospace' }} tickLine={false} axisLine={false} width={52} />
-          <Tooltip content={<GbbTooltip unit="TJ" />} />
-          <Legend wrapperStyle={{ fontSize: '0.72rem', fontFamily: 'DM Mono, monospace', paddingTop: '0.5rem' }} />
+      <ResponsiveContainer width="100%" height={240}>
+        <LineChart data={chartRows} margin={CHART_MARGIN}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+          <XAxis dataKey="date" {...XAXIS_PROPS} />
+          <YAxis {...YAXIS_PROPS} />
+          <Tooltip content={<SqTooltip unit="TJ" />} />
+          <Legend wrapperStyle={LEGEND_STYLE} />
           {activePipes.map(p => (
             <Line key={p} type="monotone" dataKey={p}
-              stroke={PIPE_COLOURS[p] ?? NAVY} strokeWidth={1.75}
-              dot={false} connectNulls activeDot={{ r: 3, strokeWidth: 0 }} />
+              stroke={PIPE_COLOURS[p] ?? 'var(--sq-teal)'} strokeWidth={1.75}
+              dot={false} connectNulls activeDot={{r:3,strokeWidth:0}} />
           ))}
         </LineChart>
       </ResponsiveContainer>
-
-      <ChartRangeControls dates={dates} dateRange={dateRange} onDateRangeChange={setDateRange}
-        windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize}
-        sliceStart={sliceStart} slicedDates={slicedDates} />
+      <RangeControls dates={dates} dateRange={range} onChange={setRange}
+        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
     </div>
   )
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function GbbDashboard() {
-  const [data,    setData]    = useState<GbbTimeseries | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState<string | null>(null)
+  const { data, loading, error, fetchedAt, fetch: fetchData } = useGbbData()
 
-  useEffect(() => {
-    fetch('/api/gbb').then(r => r.json())
-      .then(j => { if (!j.ok) throw new Error(j.error); setData(j.data) })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [])
+  useEffect(() => { fetchData() }, [])
 
-  if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4rem 0', gap: '1rem' }}>
-      <div style={{ width: 32, height: 32, border: `3px solid ${BORDER}`, borderTopColor: TEAL, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <span style={{ color: MUTED, fontFamily: 'DM Mono, monospace', fontSize: '0.8rem' }}>Fetching GBB data…</span>
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+  const lastFetched = fetchedAt
+    ? new Date(fetchedAt).toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' })
+    : null
+
+  if (loading && !data) return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'4rem 0', gap:'1rem' }}>
+      <div style={{ width:28, height:28, border:'2px solid var(--sq-border)', borderTopColor:'var(--sq-teal)', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />
+      <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.75rem' }}>Fetching GBB data…</span>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
   if (error) return (
-    <div className="card" style={{ padding: '1.5rem', color: '#D4281D', fontFamily: 'DM Mono, monospace', fontSize: '0.82rem' }}>
+    <div className="sq-card" style={{ padding:'1.5rem', color:'var(--sq-red)', fontFamily:'var(--font-data)', fontSize:'0.78rem' }}>
       GBB Error: {error}
     </div>
   )
@@ -615,10 +552,17 @@ export default function GbbDashboard() {
 
   return (
     <div>
-      <GpgPanel       dates={data.dates} gpgByState={data.gpgByState} />
-      <StoragePanel   dates={data.dates} storageByFacility={data.storageByFacility} />
+      {lastFetched && (
+        <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'0.75rem' }}>
+          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--sq-muted)' }}>
+            Updated {lastFetched}
+          </span>
+        </div>
+      )}
+      <GpgPanel        dates={data.dates} gpgByState={data.gpgByState} />
+      <StoragePanel    dates={data.dates} storageByFacility={data.storageByFacility} />
       <ProductionPanel dates={data.dates} prodByState={data.prodByState} />
-      <PipelinePanel  dates={data.dates} pipelineFlows={data.pipelineFlows} />
+      <PipelinePanel   dates={data.dates} pipelineFlows={data.pipelineFlows} />
     </div>
   )
 }

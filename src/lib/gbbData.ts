@@ -189,7 +189,7 @@ export async function getGbbData(): Promise<GbbTimeseries> {
 
   // Only keep the last 31 days to match the dashboard window
   const allDates = Array.from(new Set(allRows.map(r => r.GasDate))).sort()
-  const recentDates = allDates.slice(-31)
+  const recentDates = allDates.slice(-365)
   const rows = allRows.filter(r => recentDates.includes(r.GasDate))
 
   // Helper: get or create array
