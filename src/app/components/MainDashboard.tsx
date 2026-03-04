@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 
-const ElectricityDashboard = dynamic(() => import('./DashboardClient'), { ssr: false })
-const GbbDashboard         = dynamic(() => import('./GbbDashboard'),    { ssr: false })
+const ElectricityDashboard  = dynamic(() => import('./DashboardClient'),       { ssr: false })
+const GbbDashboard          = dynamic(() => import('./GbbDashboard'),          { ssr: false })
+const GpgProfileDashboard   = dynamic(() => import('./GpgProfileDashboard'),   { ssr: false })
 
 type TopTab = 'electricity' | 'gas' | 'gpg-profile'
 
