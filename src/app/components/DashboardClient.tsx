@@ -11,11 +11,11 @@ type IntervalOption  = '5m' | '1h' | '1d'
 type DateRangeOption = 'default' | '7d' | '3d' | '1d'
 
 const FACILITY_COLOURS = [
-  '#00B4A0','#3DDC84','#FF6B35','#7B9FF9','#E8425A',
-  '#00D4FF','#A8E063','#FFB347','#CF9FFF','#FF6B9D',
-  '#4ECDC4','#45B7D1','#96CEB4',
+  '#1B5E7B','#E8632A','#2E7D4F','#7B3FA0','#B5880C',
+  '#C0334A','#1A6B6B','#5C5FA8','#7A4F1E','#3D8B37',
+  '#A0522D','#4A7FA5','#8B6914','#5D4E6D','#2D6E6E',
 ]
-const PRICE_COLOUR = '#FF6B35'
+const PRICE_COLOUR = '#C0334A'
 
 function rowToMs(dt: string) {
   return new Date(dt.replace(' ', 'T') + ':00+10:00').getTime()
@@ -63,13 +63,13 @@ function CsvButton({ onClick }: { onClick: () => void }) {
     <button onClick={onClick} title="Download CSV" style={{
       display: 'flex', alignItems: 'center', gap: '0.3rem',
       padding: '0.25rem 0.65rem', borderRadius: 6,
-      border: '1px solid var(--sq-border)', background: 'var(--sq-surface-2)',
-      color: 'var(--sq-muted)', cursor: 'pointer',
+      border: '1px solid var(--border)', background: 'var(--surface-2)',
+      color: 'var(--muted)', cursor: 'pointer',
       fontFamily: 'var(--font-data)', fontSize: '0.65rem', fontWeight: 500,
       transition: 'border-color 0.15s, color 0.15s',
     }}
-      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--sq-teal)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--sq-teal)' }}
-      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--sq-border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--sq-muted)' }}
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)' }}
     >
       ↓ CSV
     </button>
@@ -91,17 +91,17 @@ function SqTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background: 'var(--sq-surface)', border: '1px solid var(--sq-border)',
+      background: 'var(--surface)', border: '1px solid var(--border)',
       borderRadius: 8, padding: '0.65rem 0.9rem',
       boxShadow: '0 4px 16px rgba(13,27,42,0.12)',
       fontFamily: 'var(--font-data)', fontSize: '0.75rem',
       minWidth: 200,
     }}>
-      <div style={{ color: 'var(--sq-muted)', marginBottom: '0.4rem', fontSize: '0.65rem', letterSpacing: '0.04em' }}>{label}</div>
+      <div style={{ color: 'var(--muted)', marginBottom: '0.4rem', fontSize: '0.65rem', letterSpacing: '0.04em' }}>{label}</div>
       {payload.filter((p: any) => p.value != null).map((p: any) => (
         <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', gap: '1.25rem', marginBottom: 2 }}>
           <span style={{ color: p.color ?? p.fill }}>{p.name}</span>
-          <span style={{ color: 'var(--sq-text)', fontWeight: 600 }}>
+          <span style={{ color: 'var(--text)', fontWeight: 600 }}>
             {p.name === 'Spot Price ($/MWh)' ? `$${Number(p.value).toFixed(2)}` : `${Number(p.value).toFixed(1)} MW`}
           </span>
         </div>
@@ -125,8 +125,8 @@ function PillGroup<T extends string>({
 }: { label: string; options: {value:T; label:string}[]; value: T; onChange:(v:T)=>void; disabled?: boolean }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-      {label && <span style={{ color: 'var(--sq-muted)', fontSize: '0.65rem', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>}
-      <div style={{ display: 'flex', background: 'var(--sq-surface-2)', border: '1px solid var(--sq-border)', borderRadius: 8, padding: 2, gap: 2 }}>
+      {label && <span style={{ color: 'var(--muted)', fontSize: '0.65rem', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>}
+      <div style={{ display: 'flex', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: 2, gap: 2 }}>
         {options.map(opt => {
           const active = opt.value === value
           return (
@@ -134,8 +134,8 @@ function PillGroup<T extends string>({
               padding: '0.28rem 0.7rem', borderRadius: 6, border: 'none',
               cursor: disabled ? 'not-allowed' : 'pointer',
               fontFamily: 'var(--font-ui)', fontSize: '0.75rem', fontWeight: active ? 600 : 400,
-              background: active ? 'var(--sq-teal)' : 'transparent',
-              color: active ? '#fff' : 'var(--sq-muted)',
+              background: active ? 'var(--accent)' : 'transparent',
+              color: active ? '#fff' : 'var(--muted)',
               transition: 'all 0.15s', opacity: disabled ? 0.4 : 1,
             }}>{opt.label}</button>
           )
@@ -151,27 +151,27 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
   return (
     <div style={{ marginTop: '0.85rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--sq-muted)' }}>{firstLabel}</span>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: 'var(--sq-teal)', background: 'var(--sq-surface-2)', border: '1px solid var(--sq-border)', padding: '1px 8px', borderRadius: 5, fontWeight: 600 }}>
+        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--muted)' }}>{firstLabel}</span>
+        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: 'var(--accent)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '1px 8px', borderRadius: 5, fontWeight: 600 }}>
           {windowStartLabel} → {windowEndLabel}
         </span>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--sq-muted)' }}>{lastLabel}</span>
+        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--muted)' }}>{lastLabel}</span>
       </div>
       <div style={{ position: 'relative', height: 24, display: 'flex', alignItems: 'center' }}>
-        <div style={{ position: 'absolute', left: 0, right: 0, height: 4, background: 'var(--sq-surface-2)', border: '1px solid var(--sq-border)', borderRadius: 2 }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, height: 4, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 2 }} />
         <div style={{
           position: 'absolute',
           left:  `${((windowEnd - windowSize + 1) / (totalRows - 1)) * 100}%`,
           right: `${((totalRows - 1 - windowEnd) / (totalRows - 1)) * 100}%`,
-          height: 4, background: 'var(--sq-teal)', borderRadius: 2, opacity: 0.8, transition: 'left 0.08s, right 0.08s',
+          height: 4, background: 'var(--accent)', borderRadius: 2, opacity: 0.8, transition: 'left 0.08s, right 0.08s',
         }} />
         <input type="range" min={min} max={max} value={windowEnd} onChange={e => onChange(Number(e.target.value))}
           style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, cursor: 'pointer', height: 24, margin: 0 }} />
         <div style={{
           position: 'absolute', left: `calc(${((windowEnd - min) / (max - min)) * 100}% - 7px)`,
           width: 14, height: 14, borderRadius: '50%',
-          background: 'var(--sq-surface)', border: '2px solid var(--sq-teal)',
-          boxShadow: '0 0 6px var(--sq-teal-glow)', pointerEvents: 'none', transition: 'left 0.08s',
+          background: 'var(--surface)', border: '2px solid var(--accent)',
+          boxShadow: '0 0 6px var(--accent-glow)', pointerEvents: 'none', transition: 'left 0.08s',
         }} />
       </div>
     </div>
@@ -211,16 +211,16 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
     { value:'3d', label:'3d' }, { value:'1d', label:'1d' },
   ]
 
-  const regionColour = region === 'NSW' ? '#7B9FF9' : 'var(--sq-teal)'
+  const regionColour = region === 'NSW' ? '#7B9FF9' : 'var(--accent)'
 
   return (
     <div>
       <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'1.25rem' }}>
         <div style={{ width:8, height:8, borderRadius:'50%', background: regionColour, boxShadow: `0 0 6px ${regionColour}` }} />
-        <h2 style={{ fontSize:'1rem', fontWeight:700, color:'var(--sq-text)', margin:0, letterSpacing:'-0.01em' }}>
+        <h2 style={{ fontSize:'1rem', fontWeight:700, color:'var(--text)', margin:0, letterSpacing:'-0.01em' }}>
           {region === 'NSW' ? 'New South Wales' : 'Victoria'}
         </h2>
-        <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.65rem', letterSpacing:'0.04em' }}>
+        <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.65rem', letterSpacing:'0.04em' }}>
           {summary.facilityCount} facilities · {visibleRows.length} intervals
         </span>
       </div>
@@ -236,8 +236,8 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
       <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1rem' }}>
           <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
-            <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Generation by Facility</h3>
-            <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.65rem' }}>avg MW per interval</span>
+            <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>Gas Generation by Facility</h3>
+            <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.65rem' }}>avg MW per interval</span>
           </div>
           <CsvButton onClick={() => downloadCsv(visibleRows.map((r: any) => ({ datetime: r.datetime, price: r.price, ...Object.fromEntries(facilities.map((f: string) => [f, r[f]])) })), `generation-${region}.csv`)} />
         </div>
@@ -251,18 +251,18 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
                 </linearGradient>
               ))}
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis dataKey="datetime" tickFormatter={tickFmt}
-              tick={{ fill:'var(--sq-muted)', fontSize:9, fontFamily:'var(--font-data)' }}
-              tickLine={false} axisLine={{ stroke:'var(--sq-border)' }} interval="preserveStartEnd" />
+              tick={{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' }}
+              tickLine={false} axisLine={{ stroke:'var(--border)' }} interval="preserveStartEnd" />
             <YAxis yAxisId="gen"
-              tick={{ fill:'var(--sq-muted)', fontSize:9, fontFamily:'var(--font-data)' }}
+              tick={{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={false} width={54} tickFormatter={v => `${v} MW`} />
             <YAxis yAxisId="price" orientation="right"
               tick={{ fill: PRICE_COLOUR, fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={false} width={62} tickFormatter={v => `$${v}`} />
             <Tooltip content={<SqTooltip />} />
-            <Legend wrapperStyle={{ fontSize:'0.65rem', fontFamily:'var(--font-data)', paddingTop:'0.5rem', color:'var(--sq-text-2)' }} />
+            <Legend wrapperStyle={{ fontSize:'0.65rem', fontFamily:'var(--font-data)', paddingTop:'0.5rem', color:'var(--text-2)' }} />
             {facilities.map((name: string, i: number) => (
               <Area key={name} yAxisId="gen" type="monotone" dataKey={name}
                 stroke={FACILITY_COLOURS[i % FACILITY_COLOURS.length]} strokeWidth={0}
@@ -276,7 +276,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
         </ResponsiveContainer>
 
         {/* Range controls below chart */}
-        <div style={{ marginTop:'1rem', paddingTop:'1rem', borderTop:'1px solid var(--sq-border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem' }}>
+        <div style={{ marginTop:'1rem', paddingTop:'1rem', borderTop:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem' }}>
           <PillGroup label="View" options={DATE_RANGE_OPTIONS} value={dateRange} onChange={onDateRangeChange} />
           {dateRange !== 'default' && rows.length > windowSize && (
             <WindowSlider
@@ -297,13 +297,13 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
           justifyContent:'space-between', alignItems:'center',
           background:'transparent', border:'none', cursor:'pointer',
         }}>
-          <span style={{ fontWeight:600, fontSize:'0.82rem', color:'var(--sq-text)' }}>Raw Data</span>
-          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--sq-muted)' }}>
+          <span style={{ fontWeight:600, fontSize:'0.82rem', color:'var(--text)' }}>Raw Data</span>
+          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)' }}>
             {visibleRows.length} rows · {showTable ? '▲' : '▼'}
           </span>
         </button>
         {showTable && (
-          <div style={{ maxHeight:320, overflowY:'auto', borderTop:'1px solid var(--sq-border)' }}>
+          <div style={{ maxHeight:320, overflowY:'auto', borderTop:'1px solid var(--border)' }}>
             <table className="sq-table">
               <thead><tr>
                 <th>Datetime</th><th>Price $/MWh</th>
@@ -347,10 +347,10 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
   const lastFetched = fetchedAt ? new Date(fetchedAt).toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' }) : null
 
   return (
-    <div style={{ background:'var(--sq-bg)' }}>
+    <div style={{ background:'var(--bg)' }}>
       {/* Sub-header: region tabs + interval */}
       <div style={{
-        background:'var(--sq-surface)', borderBottom:'1px solid var(--sq-border)',
+        background:'var(--surface)', borderBottom:'1px solid var(--border)',
         boxShadow:'0 1px 3px rgba(13,27,42,0.05)',
         padding:'0 1.75rem', display:'flex', alignItems:'center',
         justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem',
@@ -358,12 +358,12 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
         <div style={{ display:'flex' }}>
           {(['NSW','VIC'] as const).map(tab => {
             const isActive = activeTab === tab
-            const colour   = tab === 'NSW' ? '#7B9FF9' : 'var(--sq-teal)'
+            const colour   = tab === 'NSW' ? '#7B9FF9' : 'var(--accent)'
             return (
               <button key={tab} onClick={() => setActiveTab(tab)} style={{
                 padding:'0.75rem 1.25rem', border:'none', background:'transparent',
                 cursor:'pointer', fontFamily:'var(--font-ui)', fontWeight: isActive ? 600 : 400,
-                fontSize:'0.82rem', color: isActive ? colour : 'var(--sq-muted)',
+                fontSize:'0.82rem', color: isActive ? colour : 'var(--muted)',
                 borderBottom: isActive ? `2px solid ${colour}` : '2px solid transparent',
                 marginBottom:-1, transition:'all 0.15s',
               }}>{tab === 'NSW' ? 'New South Wales' : 'Victoria'}</button>
@@ -372,11 +372,11 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:'1rem', padding:'0.4rem 0' }}>
           {lastFetched && !loading && (
-            <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--sq-muted)' }}>
+            <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)' }}>
               Updated {lastFetched}
             </span>
           )}
-          {loading && <span style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--sq-teal)' }}>Loading…</span>}
+          {loading && <span style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--accent)' }}>Loading…</span>}
           <PillGroup label="Interval" options={INTERVAL_OPTIONS} value={interval} onChange={handleInterval} disabled={loading} />
         </div>
       </div>
@@ -384,13 +384,13 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
       <div style={{ maxWidth:1400, margin:'0 auto', padding:'1.5rem' }}>
         {error ? (
           <div className="sq-card" style={{ padding:'1.5rem', maxWidth:480 }}>
-            <div style={{ color:'var(--sq-red)', fontFamily:'var(--font-data)', fontSize:'0.75rem', marginBottom:'0.4rem', fontWeight:600 }}>ERROR</div>
-            <div style={{ color:'var(--sq-text)', fontSize:'0.82rem' }}>{error}</div>
+            <div style={{ color:'var(--negative)', fontFamily:'var(--font-data)', fontSize:'0.75rem', marginBottom:'0.4rem', fontWeight:600 }}>ERROR</div>
+            <div style={{ color:'var(--text)', fontSize:'0.82rem' }}>{error}</div>
           </div>
         ) : loading && !payload ? (
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'5rem 0', gap:'1rem' }}>
-            <div style={{ width:32, height:32, border:'2px solid var(--sq-border)', borderTopColor:'var(--sq-teal)', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />
-            <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.75rem' }}>Fetching generation data…</span>
+            <div style={{ width:32, height:32, border:'2px solid var(--border)', borderTopColor:'var(--accent)', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />
+            <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.75rem' }}>Fetching generation data…</span>
             <style>{`@keyframes spin { to { transform:rotate(360deg) } }`}</style>
           </div>
         ) : activeData ? (

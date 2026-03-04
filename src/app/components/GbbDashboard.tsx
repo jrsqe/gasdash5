@@ -9,16 +9,16 @@ import { useGbbData } from './MainDashboard'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const PALETTE = [
-  '#00B4A0','#3DDC84','#7B9FF9','#FF6B35','#E8425A',
-  '#00D4FF','#A8E063','#FFB347','#CF9FFF','#FF6B9D',
-  '#4ECDC4','#45B7D1','#96CEB4','#FFEAA7','#DDA0DD',
+  '#1B5E7B','#E8632A','#2E7D4F','#7B3FA0','#B5880C',
+  '#C0334A','#1A6B6B','#5C5FA8','#7A4F1E','#3D8B37',
+  '#A0522D','#4A7FA5','#8B6914','#5D4E6D','#2D6E6E',
 ]
 const PIPE_COLOURS: Record<string,string> = {
-  EGP:'#7B9FF9', MSP:'#00B4A0', MAPS:'#FF6B35', CGP:'#CF9FFF', SWQP:'#E8425A',
-  QGP:'#00D4FF', RBP:'#A8E063', 'VTS-LMP':'#FFB347', 'VTS-SWP':'#FF6B9D', 'VTS-VNI':'#4ECDC4',
-  TGP:'#96CEB4', PCA:'#FFEAA7',
+  EGP:'#1B5E7B', MSP:'#2E7D4F', MAPS:'#E8632A', CGP:'#7B3FA0', SWQP:'#B5880C',
+  QGP:'#1A6B6B', RBP:'#5C5FA8', 'VTS-LMP':'#C0334A', 'VTS-SWP':'#7A4F1E', 'VTS-VNI':'#3D8B37',
+  TGP:'#4A7FA5', PCA:'#8B6914',
 }
-const STATE_COLOURS: Record<string,string> = { NSW:'#7B9FF9', VIC:'#00B4A0', SA:'#FF6B35', QLD:'#CF9FFF', TAS:'#E8425A' }
+const STATE_COLOURS: Record<string,string> = { NSW:'var(--nsw)', VIC:'var(--vic)', SA:'var(--sa)', QLD:'var(--qld)', TAS:'var(--tas)' }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface GbbData {
@@ -52,13 +52,13 @@ function CsvButton({ onClick }: { onClick: () => void }) {
     <button onClick={onClick} title="Download CSV" style={{
       display: 'flex', alignItems: 'center', gap: '0.3rem',
       padding: '0.25rem 0.65rem', borderRadius: 6,
-      border: '1px solid var(--sq-border)', background: 'var(--sq-surface-2)',
-      color: 'var(--sq-muted)', cursor: 'pointer',
+      border: '1px solid var(--border)', background: 'var(--surface-2)',
+      color: 'var(--muted)', cursor: 'pointer',
       fontFamily: 'var(--font-data)', fontSize: '0.65rem', fontWeight: 500,
       transition: 'border-color 0.15s, color 0.15s',
     }}
-      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--sq-teal)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--sq-teal)' }}
-      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--sq-border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--sq-muted)' }}
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)' }}
     >
       ↓ CSV
     </button>
@@ -104,16 +104,16 @@ function SqTooltip({ active, payload, label, unit }: any) {
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background:'var(--sq-surface)', border:'1px solid var(--sq-border)',
+      background:'var(--surface)', border:'1px solid var(--border)',
       borderRadius:8, padding:'0.65rem 0.9rem',
       fontFamily:'var(--font-data)', fontSize:'0.75rem',
       minWidth:190, boxShadow:'0 4px 16px rgba(13,27,42,0.12)',
     }}>
-      <div style={{ color:'var(--sq-muted)', marginBottom:'0.4rem', fontSize:'0.62rem', letterSpacing:'0.04em' }}>{label}</div>
+      <div style={{ color:'var(--muted)', marginBottom:'0.4rem', fontSize:'0.62rem', letterSpacing:'0.04em' }}>{label}</div>
       {payload.filter((p: any) => p.value != null).map((p: any) => (
         <div key={p.name} style={{ display:'flex', justifyContent:'space-between', gap:'1.25rem', marginBottom:2 }}>
           <span style={{ color: p.color ?? p.fill }}>{p.name}</span>
-          <span style={{ color:'var(--sq-text)', fontWeight:600 }}>{fmt1(p.value)} {unit}</span>
+          <span style={{ color:'var(--text)', fontWeight:600 }}>{fmt1(p.value)} {unit}</span>
         </div>
       ))}
     </div>
@@ -122,16 +122,16 @@ function SqTooltip({ active, payload, label, unit }: any) {
 
 function StateTabs({ states, active, onChange }: { states:string[]; active:string; onChange:(s:string)=>void }) {
   return (
-    <div style={{ display:'flex', borderBottom:'1px solid var(--sq-border)', marginBottom:'1rem' }}>
+    <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:'1rem' }}>
       {states.map(s => {
         const isActive = s === active
-        const c = STATE_COLOURS[s] ?? 'var(--sq-teal)'
+        const c = STATE_COLOURS[s] ?? 'var(--accent)'
         return (
           <button key={s} onClick={() => onChange(s)} style={{
             padding:'0.45rem 0.85rem', border:'none', background:'transparent',
             cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.78rem',
             fontWeight: isActive ? 600 : 400,
-            color: isActive ? c : 'var(--sq-muted)',
+            color: isActive ? c : 'var(--muted)',
             borderBottom: isActive ? `2px solid ${c}` : '2px solid transparent',
             marginBottom:-1, transition:'all 0.15s',
           }}>{s}</button>
@@ -143,7 +143,7 @@ function StateTabs({ states, active, onChange }: { states:string[]; active:strin
 
 function GroupTabs({ groups, active, onChange }: { groups:string[]; active:string; onChange:(s:string)=>void }) {
   return (
-    <div style={{ display:'flex', borderBottom:'1px solid var(--sq-border)', marginBottom:'1rem' }}>
+    <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:'1rem' }}>
       {groups.map(g => {
         const isActive = g === active
         return (
@@ -151,8 +151,8 @@ function GroupTabs({ groups, active, onChange }: { groups:string[]; active:strin
             padding:'0.45rem 0.85rem', border:'none', background:'transparent',
             cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.78rem',
             fontWeight: isActive ? 600 : 400,
-            color: isActive ? 'var(--sq-teal)' : 'var(--sq-muted)',
-            borderBottom: isActive ? '2px solid var(--sq-teal)' : '2px solid transparent',
+            color: isActive ? 'var(--accent)' : 'var(--muted)',
+            borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
             marginBottom:-1, transition:'all 0.15s',
           }}>{g}</button>
         )
@@ -166,16 +166,16 @@ function PillGroup<T extends string>({ label, options, value, onChange }: {
 }) {
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'0.4rem' }}>
-      {label && <span style={{ color:'var(--sq-muted)', fontSize:'0.62rem', fontFamily:'var(--font-data)', whiteSpace:'nowrap', letterSpacing:'0.05em', textTransform:'uppercase' }}>{label}</span>}
-      <div style={{ display:'flex', background:'var(--sq-surface-2)', border:'1px solid var(--sq-border)', borderRadius:8, padding:2, gap:2 }}>
+      {label && <span style={{ color:'var(--muted)', fontSize:'0.62rem', fontFamily:'var(--font-data)', whiteSpace:'nowrap', letterSpacing:'0.05em', textTransform:'uppercase' }}>{label}</span>}
+      <div style={{ display:'flex', background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:2, gap:2 }}>
         {options.map(opt => {
           const active = opt.value === value
           return (
             <button key={opt.value} onClick={() => onChange(opt.value)} style={{
               padding:'0.25rem 0.65rem', borderRadius:6, border:'none', cursor:'pointer',
               fontFamily:'var(--font-ui)', fontSize:'0.72rem', fontWeight: active ? 600 : 400,
-              background: active ? 'var(--sq-teal)' : 'transparent',
-              color: active ? '#fff' : 'var(--sq-muted)', transition:'all 0.15s',
+              background: active ? 'var(--accent)' : 'transparent',
+              color: active ? '#fff' : 'var(--muted)', transition:'all 0.15s',
             }}>{opt.label}</button>
           )
         })}
@@ -190,27 +190,27 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
   return (
     <div style={{ marginTop:'0.85rem' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.3rem' }}>
-        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--sq-muted)' }}>{firstLabel}</span>
-        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--sq-teal)', background:'var(--sq-surface-2)', border:'1px solid var(--sq-border)', padding:'1px 7px', borderRadius:4, fontWeight:600 }}>
+        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--muted)' }}>{firstLabel}</span>
+        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--accent)', background:'var(--surface-2)', border:'1px solid var(--border)', padding:'1px 7px', borderRadius:4, fontWeight:600 }}>
           {windowStartLabel} → {windowEndLabel}
         </span>
-        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--sq-muted)' }}>{lastLabel}</span>
+        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--muted)' }}>{lastLabel}</span>
       </div>
       <div style={{ position:'relative', height:22, display:'flex', alignItems:'center' }}>
-        <div style={{ position:'absolute', left:0, right:0, height:4, background:'var(--sq-surface-2)', border:'1px solid var(--sq-border)', borderRadius:2 }} />
+        <div style={{ position:'absolute', left:0, right:0, height:4, background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:2 }} />
         <div style={{
           position:'absolute',
           left: `${((windowEnd-windowSize+1)/(totalRows-1))*100}%`,
           right:`${((totalRows-1-windowEnd)/(totalRows-1))*100}%`,
-          height:4, background:'var(--sq-teal)', borderRadius:2, opacity:0.8, transition:'left 0.08s, right 0.08s',
+          height:4, background:'var(--accent)', borderRadius:2, opacity:0.8, transition:'left 0.08s, right 0.08s',
         }} />
         <input type="range" min={min} max={max} value={windowEnd} onChange={e => onChange(Number(e.target.value))}
           style={{ position:'absolute', left:0, right:0, width:'100%', opacity:0, cursor:'pointer', height:22, margin:0 }} />
         <div style={{
           position:'absolute', left:`calc(${((windowEnd-min)/(max-min))*100}% - 6px)`,
           width:12, height:12, borderRadius:'50%',
-          background:'var(--sq-surface)', border:'2px solid var(--sq-teal)',
-          boxShadow:'0 0 6px var(--sq-teal-glow)', pointerEvents:'none', transition:'left 0.08s',
+          background:'var(--surface)', border:'2px solid var(--accent)',
+          boxShadow:'0 0 6px var(--accent-glow)', pointerEvents:'none', transition:'left 0.08s',
         }} />
       </div>
     </div>
@@ -220,11 +220,11 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
 function RangeControls({ dates, dateRange, onChange, sliced, windowEnd, setWindowEnd, windowSize, sliceStart }: any) {
   const fmtL = (d: string) => { const [,mm,dd] = d.split('-'); return `${dd}/${mm}` }
   return (
-    <div style={{ marginTop:'1rem', paddingTop:'1rem', borderTop:'1px solid var(--sq-border)' }}>
+    <div style={{ marginTop:'1rem', paddingTop:'1rem', borderTop:'1px solid var(--border)' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem' }}>
         <PillGroup options={DATE_RANGE_OPTIONS} value={dateRange} onChange={onChange} label="View" />
         {dateRange !== 'all' && (
-          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--sq-muted)' }}>
+          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--muted)' }}>
             {sliced.length} of {dates.length} days
           </span>
         )}
@@ -243,14 +243,14 @@ function RangeControls({ dates, dateRange, onChange, sliced, windowEnd, setWindo
 }
 
 const XAXIS_PROPS = {
-  tick:{ fill:'var(--sq-muted)', fontSize:9, fontFamily:'var(--font-data)' },
-  tickLine:false, axisLine:{ stroke:'var(--sq-border)' }, interval:'preserveStartEnd' as const,
+  tick:{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' },
+  tickLine:false, axisLine:{ stroke:'var(--border)' }, interval:'preserveStartEnd' as const,
 }
 const YAXIS_PROPS = {
-  tick:{ fill:'var(--sq-muted)', fontSize:9, fontFamily:'var(--font-data)' },
+  tick:{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' },
   tickLine:false, axisLine:false, width:52,
 }
-const LEGEND_STYLE = { fontSize:'0.65rem', fontFamily:'var(--font-data)', paddingTop:'0.4rem', color:'var(--sq-text-2)' }
+const LEGEND_STYLE = { fontSize:'0.65rem', fontFamily:'var(--font-data)', paddingTop:'0.4rem', color:'var(--text-2)' }
 const CHART_MARGIN = { top:4, right:12, left:0, bottom:4 }
 
 // ── GPG Panel ─────────────────────────────────────────────────────────────────
@@ -274,15 +274,15 @@ function GpgPanel({ dates, gpgByState }: { dates:string[]; gpgByState: Record<st
     <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1rem' }}>
         <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
-          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>GPG Gas Demand</h3>
-          <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
+          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>GPG Gas Demand</h3>
+          <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
         </div>
         <CsvButton onClick={() => downloadCsv(rows, `gpg-demand-${state}.csv`)} />
       </div>
       {states.length > 1 && <StateTabs states={states} active={state} onChange={setState} />}
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={rows} margin={CHART_MARGIN}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis dataKey="date" {...XAXIS_PROPS} />
           <YAxis {...YAXIS_PROPS} />
           <Tooltip content={<SqTooltip unit="TJ" />} />
@@ -333,8 +333,8 @@ function StoragePanel({ dates, storageByFacility }: {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
           <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
-            <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Storage</h3>
-            <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ</span>
+            <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>Gas Storage</h3>
+            <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ</span>
           </div>
           <CsvButton onClick={() => downloadCsv(metric === 'level' ? levelRows : flowRows, `storage-${state}-${metric}.csv`)} />
         </div>
@@ -346,7 +346,7 @@ function StoragePanel({ dates, storageByFacility }: {
       {metric === 'level' ? (
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={levelRows} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="date" {...XAXIS_PROPS} />
             <YAxis {...YAXIS_PROPS} tickFormatter={v => fmt0(v)} />
             <Tooltip content={<SqTooltip unit="TJ" />} />
@@ -360,10 +360,10 @@ function StoragePanel({ dates, storageByFacility }: {
       ) : (
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={flowRows} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="date" {...XAXIS_PROPS} />
             <YAxis {...YAXIS_PROPS} />
-            <ReferenceLine y={0} stroke="var(--sq-border-2)" />
+            <ReferenceLine y={0} stroke="var(--border-2)" />
             <Tooltip content={<SqTooltip unit="TJ" />} />
             <Legend wrapperStyle={LEGEND_STYLE} />
             {sf.flatMap((f,i) => [
@@ -406,16 +406,16 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
     <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
         <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
-          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Production</h3>
-          <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
+          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>Gas Production</h3>
+          <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
         </div>
         <div style={{ display:'flex', gap:'0.4rem' }}>
           <CsvButton onClick={() => downloadCsv(rows, `production-${state}.csv`)} />
           <button onClick={() => setShowFilter(v => !v)} style={{
             padding:'0.25rem 0.65rem', borderRadius:6,
-            border: `1px solid ${showFilter ? 'var(--sq-teal)' : 'var(--sq-border)'}`,
-            background: showFilter ? 'var(--sq-teal-glow)' : 'transparent',
-            color: showFilter ? 'var(--sq-teal)' : 'var(--sq-muted)',
+            border: `1px solid ${showFilter ? 'var(--accent)' : 'var(--border)'}`,
+            background: showFilter ? 'var(--accent-glow)' : 'transparent',
+            color: showFilter ? 'var(--accent)' : 'var(--muted)',
             cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.72rem', fontWeight:500,
           }}>
             {selected.size > 0 ? `${active.length}/${allFacilities.length} shown` : 'Filter'}
@@ -424,10 +424,10 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
       </div>
 
       {showFilter && (
-        <div style={{ background:'var(--sq-surface-2)', border:'1px solid var(--sq-border)', borderRadius:8, padding:'0.65rem', marginBottom:'0.85rem' }}>
+        <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'0.65rem', marginBottom:'0.85rem' }}>
           <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.5rem' }}>
-            <button onClick={() => setSelected(new Set())} style={{ fontSize:'0.65rem', padding:'2px 8px', borderRadius:4, border:'1px solid var(--sq-border)', background:'transparent', color:'var(--sq-teal)', cursor:'pointer' }}>All</button>
-            <button onClick={() => setSelected(new Set(allFacilities))} style={{ fontSize:'0.65rem', padding:'2px 8px', borderRadius:4, border:'1px solid var(--sq-border)', background:'transparent', color:'var(--sq-muted)', cursor:'pointer' }}>None</button>
+            <button onClick={() => setSelected(new Set())} style={{ fontSize:'0.65rem', padding:'2px 8px', borderRadius:4, border:'1px solid var(--border)', background:'transparent', color:'var(--accent)', cursor:'pointer' }}>All</button>
+            <button onClick={() => setSelected(new Set(allFacilities))} style={{ fontSize:'0.65rem', padding:'2px 8px', borderRadius:4, border:'1px solid var(--border)', background:'transparent', color:'var(--muted)', cursor:'pointer' }}>None</button>
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:'0.35rem', maxHeight:140, overflowY:'auto' }}>
             {allFacilities.map((f,i) => {
@@ -436,8 +436,8 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
                 <button key={f} onClick={() => toggle(f)} style={{
                   padding:'2px 9px', borderRadius:20, border:'none', cursor:'pointer',
                   fontFamily:'var(--font-data)', fontSize:'0.65rem', fontWeight: on ? 600 : 400,
-                  background: on ? PALETTE[i%PALETTE.length] : 'var(--sq-border)',
-                  color: on ? '#fff' : 'var(--sq-muted)', transition:'all 0.1s',
+                  background: on ? PALETTE[i%PALETTE.length] : 'var(--border)',
+                  color: on ? '#fff' : 'var(--muted)', transition:'all 0.1s',
                 }}>{f}</button>
               )
             })}
@@ -448,7 +448,7 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
       {states.length > 1 && <StateTabs states={states} active={state} onChange={setState} />}
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={rows} margin={CHART_MARGIN}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis dataKey="date" {...XAXIS_PROPS} />
           <YAxis {...YAXIS_PROPS} />
           <Tooltip content={<SqTooltip unit="TJ" />} />
@@ -478,25 +478,32 @@ function PipelinePanel({ dates, pipelineFlows }: {
     { label:'Queensland',      pipes: pipelines.filter(p => ['CGP','SWQP','QGP','RBP'].includes(p)) },
   ].filter(g => g.pipes.length > 0)
 
-  const [activeGroup, setActiveGroup] = useState(groups[0]?.label ?? '')
-  const [range, setRange] = useState<DateRangeOption>('all')
+  const [activeGroup,  setActiveGroup]  = useState(groups[0]?.label ?? '')
+  const [range,        setRange]        = useState<DateRangeOption>('all')
+  const [showFilter,   setShowFilter]   = useState(false)
+  const [hiddenPipes,  setHiddenPipes]  = useState<Set<string>>(new Set())
   const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(dates, range)
 
-  const activePipes = groups.find(g => g.label === activeGroup)?.pipes ?? []
+  const groupPipes   = groups.find(g => g.label === activeGroup)?.pipes ?? []
+  const visiblePipes = groupPipes.filter(p => !hiddenPipes.has(p))
+  const latest       = Object.fromEntries(pipelines.map(p => [p, lastVal(pipelineFlows[p]?.flow ?? [])]))
+
+  const handleGroupChange = (g: string) => { setActiveGroup(g); setHiddenPipes(new Set()); setShowFilter(false) }
+  const togglePipe = (p: string) => setHiddenPipes(prev => {
+    const n = new Set(prev); n.has(p) ? n.delete(p) : n.add(p); return n
+  })
 
   const chartRows = sliced.map((d,i) => {
     const gi = sliceStart+i
-    return { date:fmtD(d), ...Object.fromEntries(activePipes.map(p => [p, pipelineFlows[p]?.flow[gi] ?? null])) }
+    return { date:fmtD(d), ...Object.fromEntries(visiblePipes.map(p => [p, pipelineFlows[p]?.flow[gi] ?? null])) }
   })
-
-  const latest = Object.fromEntries(pipelines.map(p => [p, lastVal(pipelineFlows[p]?.flow ?? [])]))
 
   return (
     <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1.25rem' }}>
         <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
-          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Pipeline Flows</h3>
-          <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day · GBB</span>
+          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>Pipeline Flows</h3>
+          <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day · GBB</span>
         </div>
         <CsvButton onClick={() => {
           const allRows = dates.map((d, i) => ({ date: fmtD(d), ...Object.fromEntries(pipelines.map(p => [p, pipelineFlows[p]?.flow[i] ?? ''])) }))
@@ -514,18 +521,18 @@ function PipelinePanel({ dates, pipelineFlows }: {
           </tr></thead>
           <tbody>
             {pipelines.map(p => {
-              const val = latest[p]
-              const colour = PIPE_COLOURS[p] ?? 'var(--sq-teal)'
+              const val    = latest[p]
+              const colour = PIPE_COLOURS[p] ?? 'var(--accent)'
               return (
                 <tr key={p}>
                   <td style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
-                    <div style={{ width:7, height:7, borderRadius:'50%', background:colour, boxShadow:`0 0 4px ${colour}`, flexShrink:0 }} />
-                    <span style={{ fontWeight:600, color:'var(--sq-text)' }}>{p}</span>
+                    <div style={{ width:7, height:7, borderRadius:'50%', background:colour, flexShrink:0 }} />
+                    <span style={{ fontWeight:600, color:'var(--text)' }}>{p}</span>
                   </td>
-                  <td style={{ textAlign:'right', fontWeight:700, color: val != null ? 'var(--sq-teal)' : 'var(--sq-muted)' }}>
+                  <td style={{ textAlign:'right', fontWeight:700, color: val != null ? 'var(--accent)' : 'var(--muted)' }}>
                     {val != null ? val.toLocaleString('en-AU',{maximumFractionDigits:1}) : '—'}
                   </td>
-                  <td style={{ color:'var(--sq-text-2)' }}>→ {pipelineFlows[p]?.direction ?? '—'}</td>
+                  <td style={{ color:'var(--text-2)' }}>→ {pipelineFlows[p]?.direction ?? '—'}</td>
                 </tr>
               )
             })}
@@ -533,34 +540,94 @@ function PipelinePanel({ dates, pipelineFlows }: {
         </table>
       </div>
 
-      <GroupTabs groups={groups.map(g => g.label)} active={activeGroup} onChange={setActiveGroup} />
-
-      {/* Direction badges */}
-      <div style={{ display:'flex', flexWrap:'wrap', gap:'0.35rem', marginBottom:'0.85rem' }}>
-        {activePipes.map(p => (
-          <div key={p} style={{
-            display:'flex', alignItems:'center', gap:'0.3rem',
-            background:'var(--sq-surface-2)', border:`1px solid ${PIPE_COLOURS[p] ?? 'var(--sq-border)'}`,
-            borderRadius:5, padding:'2px 8px',
-            fontFamily:'var(--font-data)', fontSize:'0.65rem',
-          }}>
-            <div style={{ width:6, height:6, borderRadius:'50%', background:PIPE_COLOURS[p] ?? 'var(--sq-teal)' }} />
-            <span style={{ color:'var(--sq-text)', fontWeight:600 }}>{p}</span>
-            <span style={{ color:'var(--sq-muted)' }}>→ {pipelineFlows[p]?.direction}</span>
-          </div>
-        ))}
+      {/* Group tabs + filter button inline */}
+      <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom: showFilter ? '0.1rem' : '0.75rem' }}>
+        <div style={{ display:'flex', borderBottom:'1px solid var(--border)', flex:1 }}>
+          {groups.map(g => {
+            const isActive = g.label === activeGroup
+            return (
+              <button key={g.label} onClick={() => handleGroupChange(g.label)} style={{
+                padding:'0.45rem 0.85rem', border:'none', background:'transparent',
+                cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.78rem',
+                fontWeight: isActive ? 600 : 400,
+                color: isActive ? 'var(--accent)' : 'var(--muted)',
+                borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+                marginBottom:-1, transition:'all 0.15s',
+              }}>{g.label}</button>
+            )
+          })}
+        </div>
+        <button onClick={() => setShowFilter(v => !v)} style={{
+          marginLeft:'0.75rem', marginBottom:'1px', flexShrink:0,
+          padding:'0.25rem 0.65rem', borderRadius:'var(--radius-sm)',
+          border: `1px solid ${showFilter ? 'var(--accent)' : 'var(--border)'}`,
+          background: showFilter ? 'var(--accent-glow)' : 'transparent',
+          color: showFilter ? 'var(--accent)' : 'var(--muted)',
+          cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.72rem', fontWeight:500,
+        }}>
+          {hiddenPipes.size > 0 ? `${visiblePipes.length}/${groupPipes.length} shown` : 'Filter'}
+        </button>
       </div>
+
+      {/* Filter pills */}
+      {showFilter && (
+        <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', padding:'0.65rem', margin:'0.5rem 0 0.85rem' }}>
+          <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.5rem' }}>
+            <button onClick={() => setHiddenPipes(new Set())} style={{ fontSize:'0.62rem', padding:'2px 8px', borderRadius:4, border:'1px solid var(--border)', background:'transparent', color:'var(--accent)', cursor:'pointer', fontFamily:'var(--font-data)' }}>All</button>
+            <button onClick={() => setHiddenPipes(new Set(groupPipes))} style={{ fontSize:'0.62rem', padding:'2px 8px', borderRadius:4, border:'1px solid var(--border)', background:'transparent', color:'var(--muted)', cursor:'pointer', fontFamily:'var(--font-data)' }}>None</button>
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem' }}>
+            {groupPipes.map(p => {
+              const visible = !hiddenPipes.has(p)
+              const colour  = PIPE_COLOURS[p] ?? 'var(--accent)'
+              return (
+                <button key={p} onClick={() => togglePipe(p)} style={{
+                  display:'flex', alignItems:'center', gap:'0.35rem',
+                  padding:'4px 10px', borderRadius:20,
+                  border: `1.5px solid ${visible ? colour : 'var(--border)'}`,
+                  background: visible ? colour + '18' : 'transparent',
+                  color: visible ? colour : 'var(--muted)',
+                  cursor:'pointer', fontFamily:'var(--font-data)', fontSize:'0.7rem', fontWeight: visible ? 600 : 400,
+                  transition:'all 0.12s',
+                }}>
+                  <div style={{ width:7, height:7, borderRadius:'50%', background: visible ? colour : 'var(--border)', flexShrink:0 }} />
+                  {p}
+                  <span style={{ fontWeight:400, fontSize:'0.6rem', opacity:0.75 }}>→ {pipelineFlows[p]?.direction}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Direction badges for visible pipes (when filter not open) */}
+      {!showFilter && (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:'0.35rem', marginBottom:'0.85rem' }}>
+          {visiblePipes.map(p => (
+            <div key={p} style={{
+              display:'flex', alignItems:'center', gap:'0.3rem',
+              background:'var(--surface-2)', border:'1px solid var(--border)',
+              borderRadius:5, padding:'2px 8px',
+              fontFamily:'var(--font-data)', fontSize:'0.65rem',
+            }}>
+              <div style={{ width:7, height:7, borderRadius:'50%', background:PIPE_COLOURS[p] ?? 'var(--accent)', flexShrink:0 }} />
+              <span style={{ color:'var(--text)', fontWeight:600 }}>{p}</span>
+              <span style={{ color:'var(--muted)' }}>→ {pipelineFlows[p]?.direction}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={chartRows} margin={CHART_MARGIN}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="date" {...XAXIS_PROPS} />
           <YAxis {...YAXIS_PROPS} />
           <Tooltip content={<SqTooltip unit="TJ" />} />
           <Legend wrapperStyle={LEGEND_STYLE} />
-          {activePipes.map(p => (
+          {visiblePipes.map(p => (
             <Line key={p} type="monotone" dataKey={p}
-              stroke={PIPE_COLOURS[p] ?? 'var(--sq-teal)'} strokeWidth={1.75}
+              stroke={PIPE_COLOURS[p] ?? 'var(--accent)'} strokeWidth={2}
               dot={false} connectNulls activeDot={{r:3,strokeWidth:0}} />
           ))}
         </LineChart>
@@ -569,6 +636,7 @@ function PipelinePanel({ dates, pipelineFlows }: {
         sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
     </div>
   )
+}
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -583,13 +651,13 @@ export default function GbbDashboard() {
 
   if (loading && !data) return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'4rem 0', gap:'1rem' }}>
-      <div style={{ width:28, height:28, border:'2px solid var(--sq-border)', borderTopColor:'var(--sq-teal)', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />
-      <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.75rem' }}>Fetching GBB data…</span>
+      <div style={{ width:28, height:28, border:'2px solid var(--border)', borderTopColor:'var(--accent)', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />
+      <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.75rem' }}>Fetching GBB data…</span>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
   if (error) return (
-    <div className="sq-card" style={{ padding:'1.5rem', color:'var(--sq-red)', fontFamily:'var(--font-data)', fontSize:'0.78rem' }}>
+    <div className="sq-card" style={{ padding:'1.5rem', color:'var(--negative)', fontFamily:'var(--font-data)', fontSize:'0.78rem' }}>
       GBB Error: {error}
     </div>
   )
@@ -599,7 +667,7 @@ export default function GbbDashboard() {
     <div>
       {lastFetched && (
         <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'0.75rem' }}>
-          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--sq-muted)' }}>
+          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)' }}>
             Updated {lastFetched}
           </span>
         </div>

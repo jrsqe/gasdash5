@@ -69,11 +69,11 @@ export default function MainDashboard() {
   const [tab, setTab] = useState<TopTab>('electricity')
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--sq-bg)' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       {/* Header */}
       <header style={{
-        background: 'var(--sq-surface)',
-        borderBottom: '1px solid var(--sq-border)',
+        background: 'var(--surface)',
+        borderBottom: '1px solid var(--border)',
         boxShadow: '0 1px 4px rgba(13,27,42,0.06)',
         position: 'sticky', top: 0, zIndex: 100,
         padding: '0 1.75rem',
@@ -84,23 +84,23 @@ export default function MainDashboard() {
           {/* Squadron logomark */}
           <div style={{
             width: 32, height: 32, borderRadius: 6,
-            background: 'linear-gradient(135deg, var(--sq-teal) 0%, var(--sq-teal-dim) 100%)',
+            background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent) 100%)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 800, fontSize: '0.75rem', color: 'var(--sq-navy)',
+            fontWeight: 800, fontSize: '0.75rem', color: 'var(--surface)',
             fontFamily: 'var(--font-ui)', letterSpacing: '-0.03em', flexShrink: 0,
           }}>SQ</div>
           <div>
-            <div style={{ color: 'var(--sq-text)', fontWeight: 700, fontSize: '0.9rem', letterSpacing: '-0.01em', lineHeight: 1.15 }}>
+            <div style={{ color: 'var(--text)', fontWeight: 700, fontSize: '0.9rem', letterSpacing: '-0.01em', lineHeight: 1.15 }}>
               Energy Intelligence
             </div>
-            <div style={{ color: 'var(--sq-muted)', fontSize: '0.62rem', fontFamily: 'var(--font-data)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            <div style={{ color: 'var(--muted)', fontSize: '0.62rem', fontFamily: 'var(--font-data)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
               Squadron Energy
             </div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--sq-teal)', boxShadow: '0 0 6px var(--sq-teal)' }} />
-          <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--sq-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px var(--accent)' }} />
+          <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             NEM Live
           </span>
         </div>
@@ -108,8 +108,8 @@ export default function MainDashboard() {
 
       {/* Top-level tabs */}
       <div style={{
-        background: 'var(--sq-surface)',
-        borderBottom: '1px solid var(--sq-border)',
+        background: 'var(--surface)',
+        borderBottom: '1px solid var(--border)',
         padding: '0 1.75rem',
         display: 'flex', gap: 0,
       }}>
@@ -124,8 +124,8 @@ export default function MainDashboard() {
               border: 'none', background: 'transparent', cursor: 'pointer',
               fontFamily: 'var(--font-ui)', fontWeight: isActive ? 600 : 400,
               fontSize: '0.82rem', letterSpacing: '-0.01em',
-              color: isActive ? 'var(--sq-teal)' : 'var(--sq-muted)',
-              borderBottom: isActive ? '2px solid var(--sq-teal)' : '2px solid transparent',
+              color: isActive ? 'var(--accent)' : 'var(--muted)',
+              borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
               marginBottom: -1, transition: 'color 0.15s, border-color 0.15s',
             }}>{label}</button>
           )
@@ -143,17 +143,17 @@ export default function MainDashboard() {
       </div>
 
       <footer style={{
-        borderTop: '1px solid var(--sq-border)',
-        background: 'var(--sq-surface)',
+        borderTop: '1px solid var(--border)',
+        background: 'var(--surface)',
         padding: '0.75rem 1.75rem',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--sq-muted)' }}>
+        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)' }}>
           {tab === 'electricity'
             ? 'Open Electricity API · openelectricity.org.au'
             : 'AEMO Gas Bulletin Board · nemweb.com.au'}
         </span>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--sq-muted)', letterSpacing: '0.04em' }}>
+        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)', letterSpacing: '0.04em' }}>
           Data refreshes hourly
         </span>
       </footer>
