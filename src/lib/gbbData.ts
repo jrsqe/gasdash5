@@ -363,8 +363,10 @@ export async function getGbbData(): Promise<GbbTimeseries> {
       const signed = calcPipelineFlow(dateRows, rule)
       if (!pipelineFlows[rule.shortName]) {
         pipelineFlows[rule.shortName] = {
-          flow:      new Array(recentDates.length).fill(null),
-          direction: rule.directionFn(signed),
+          flow:              new Array(recentDates.length).fill(null),
+          direction:         rule.directionFn(signed),
+          nameplateCapacity: null,
+          stcCapacity:       null,
         }
       }
       pipelineFlows[rule.shortName].flow[i] = Math.abs(signed)
