@@ -17,6 +17,7 @@ const PIPE_COLOURS: Record<string,string> = {
   EGP:'#1B5E7B', MSP:'#2E7D4F', MAPS:'#E8632A', CGP:'#7B3FA0', SWQP:'#B5880C',
   QGP:'#1A6B6B', RBP:'#5C5FA8', 'VTS-LMP':'#C0334A', 'VTS-SWP':'#7A4F1E', 'VTS-VNI':'#3D8B37',
   TGP:'#4A7FA5', PCA:'#8B6914',
+  GLNG:'#C0334A', APLNG:'#2D6E6E', WGP:'#7A4F1E',
 }
 const STATE_COLOURS: Record<string,string> = { NSW:'var(--nsw)', VIC:'var(--vic)', SA:'var(--sa)', QLD:'var(--qld)', TAS:'var(--tas)' }
 
@@ -525,7 +526,7 @@ function PipelinePanel({ dates, pipelineFlows }: {
   const groups = [
     { label:'Interconnectors', pipes: pipelines.filter(p => ['EGP','MSP','MAPS','TGP','PCA'].includes(p)) },
     { label:'VTS',             pipes: pipelines.filter(p => p.startsWith('VTS')) },
-    { label:'Queensland',      pipes: pipelines.filter(p => ['CGP','SWQP','QGP','RBP'].includes(p)) },
+    { label:'Queensland',      pipes: pipelines.filter(p => ['CGP','SWQP','QGP','RBP','GLNG','APLNG','WGP'].includes(p)) },
   ].filter(g => g.pipes.length > 0)
 
   const [activeGroup,  setActiveGroup]  = useState(groups[0]?.label ?? '')

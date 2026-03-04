@@ -73,6 +73,9 @@ const PIPELINE_NODES: Record<string, { receipt: string; delivery: string; when?:
               { receipt: '1203003', delivery: '1303054', when: 'negative' }],
   'TGP':     [{ receipt: '1307000', delivery: '1707012' }],
   'PCA':     [{ receipt: '1305050', delivery: '1505088' }],
+  'GLNG':    [{ receipt: '1404172', delivery: '1404160' }],
+  'APLNG':   [{ receipt: '1404048', delivery: '1404050' }],
+  'WGP':     [{ receipt: '1404143', delivery: '1404194' }],
 }
 
 async function fetchCapacities(mostRecentGasDate: string, latestSignedFlows: Record<string, number | null>): Promise<{
@@ -326,6 +329,10 @@ const PIPELINE_RULES: PipelineRule[] = [
   { shortName: 'VTS-VNI', facilityName: 'VTS', locationName: 'Culcairn',     directionFn: v => v >= 0 ? 'South' : 'North' },
   { shortName: 'TGP',     facilityName: 'TGP',                          locationName: 'Longford',    directionFn: () => 'South' },
   { shortName: 'PCA',     facilityName: 'PCA',                          locationName: 'Iona',        directionFn: () => 'West' },
+  // LNG export pipelines — flow = Demand at Curtis Island
+  { shortName: 'GLNG',    facilityName: 'GLNG Pipeline',                locationName: 'Curtis Island', useTotalDemand: true, directionFn: () => 'North' },
+  { shortName: 'APLNG',   facilityName: 'APLNG Pipeline',               locationName: 'Curtis Island', useTotalDemand: true, directionFn: () => 'North' },
+  { shortName: 'WGP',     facilityName: 'WGP',                          locationName: 'Curtis Island', useTotalDemand: true, directionFn: () => 'North' },
 ]
 
 function calcPipelineFlow(rows: GbbRow[], rule: PipelineRule): number {
