@@ -78,6 +78,16 @@ const PIPELINE_NODES: Record<string, { receipt: string; delivery: string; when?:
   'WGP':     [{ receipt: '1404143', delivery: '1404194' }],
 }
 
+// Maps pipeline shortName → exact FacilityName string in capacity CSVs
+// (where shortName differs from the CSV facility name)
+const CAPACITY_FAC_NAME: Record<string, string> = {
+  'VTS-LMP':  'VTS',
+  'VTS-SWP':  'VTS',
+  'VTS-VNI':  'VTS',
+  'GLNG':     'GLNG Pipeline',
+  'APLNG':    'APLNG Pipeline',
+}
+
 async function fetchCapacities(mostRecentGasDate: string, latestSignedFlows: Record<string, number | null>): Promise<{
   nameplate: Record<string, number | null>
   stc:       Record<string, number | null>
@@ -139,7 +149,7 @@ async function fetchCapacities(mostRecentGasDate: string, latestSignedFlows: Rec
     )
 
     for (const [pipe, pairs] of Object.entries(PIPELINE_NODES)) {
-      const facName   = pipe.startsWith('VTS') ? 'VTS' : pipe
+      const facName   = CAPACITY_FAC_NAME[pipe] ?? pipe
       const flowVal   = latestSignedFlows[pipe] ?? null
       // Filter pairs by direction: 'positive'/'negative' only when we know flow direction
       const activePairs = pairs.filter(p => {
@@ -187,7 +197,7 @@ async function fetchCapacities(mostRecentGasDate: string, latestSignedFlows: Rec
     )
 
     for (const [pipe, pairs] of Object.entries(PIPELINE_NODES)) {
-      const facName   = pipe.startsWith('VTS') ? 'VTS' : pipe
+      const facName   = CAPACITY_FAC_NAME[pipe] ?? pipe
       const flowVal   = latestSignedFlows[pipe] ?? null
       const activePairs = pairs.filter(p => {
         if (!p.when || p.when === 'any') return true
