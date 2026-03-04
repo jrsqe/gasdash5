@@ -37,7 +37,108 @@ export interface GbbTimeseries {
     supply:        (number | null)[]
     demand:        (number | null)[]
   }>
-  pipelineFlows:     Record<string, { flow: number[]; direction: string }>
+  pipelineFlows:     Record<string, { flow: number[]; direction: string; nameplateCapacity: number | null; stcCapacity: number | null }>
+}
+
+// ── Capacity URLs ─────────────────────────────────────────────────────────────
+const NP_URL  = 'https://nemweb.com.au/Reports/Current/GBB/GasBBNameplateRatingCurrent.csv'
+const STC_URL = 'https://nemweb.com.au/Reports/Current/GBB/GasBBShortTermCapacityOutlook.CSV'
+
+// Node pairs (receipt→delivery) per pipeline shortName.
+// For pipelines with multiple segments, we take min (bottleneck).
+// Bidirectional pipelines list both directions; we take max flow direction capacity.
+const PIPELINE_NODES: Record<string, { receipt: string; delivery: string }[]> = {
+  'EGP':     [{ receipt: '1302000', delivery: '1202003' }],
+  'MSP':     [{ receipt: '1502045', delivery: '1202052' },   // main forward haul
+              { receipt: '1202038', delivery: '1502057' }],  // reverse
+  'MAPS':    [{ receipt: '1505013', delivery: '1505035' },   // south
+              { receipt: '1505035', delivery: '1505013' }],  // north (reverse)
+  'CGP':     [{ receipt: '1404227', delivery: '1404079' },
+              { receipt: '1404225', delivery: '1404074' }],
+  'SWQP':    [{ receipt: '1504232', delivery: '1404216' },
+              { receipt: '1404217', delivery: '1504233' }],
+  'QGP':     [{ receipt: '1404003', delivery: '1404009' }],
+  'RBP':     [{ receipt: '1404107', delivery: '1404090' }],
+  'VTS-LMP': [{ receipt: '1303000', delivery: '1303046' }],
+  'VTS-SWP': [{ receipt: '1303008', delivery: '1303084' },
+              { receipt: '1303084', delivery: '1303007' }],
+  'VTS-VNI': [{ receipt: '1303054', delivery: '1203004' },
+              { receipt: '1203003', delivery: '1303054' }],
+  'TGP':     [{ receipt: '1307000', delivery: '1707012' }],
+  'PCA':     [{ receipt: '1305050', delivery: '1505088' }],
+}
+
+async function fetchCapacities(): Promise<{
+  nameplate: Record<string, number | null>
+  stc:       Record<string, number | null>
+}> {
+  const nameplate: Record<string, number | null> = {}
+  const stc:       Record<string, number | null> = {}
+
+  try {
+    // ── Nameplate ratings ──────────────────────────────────────────────────
+    const npRes  = await fetch(NP_URL, { cache: 'no-store' })
+    const npText = await npRes.text()
+    const npLines = npText.split('\n').filter(l => l.trim())
+    const npCols  = npLines[0].split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+    const npIdxOf = (n: string) => npCols.findIndex(c => c.toLowerCase().includes(n.toLowerCase()))
+    const iFac  = npIdxOf('facility')
+    const iRec  = npIdxOf('receipt')
+    const iDel  = npIdxOf('delivery')
+    const iCap  = npIdxOf('capacity')
+    const iType = npIdxOf('mdq')   // filter to MDQ rows
+
+    const npRows = npLines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
+      .filter(r => r.length > iCap && (iType < 0 || r[iType]?.toUpperCase() === 'MDQ'))
+
+    for (const [pipe, pairs] of Object.entries(PIPELINE_NODES)) {
+      // For each pair, find the matching nameplate row capacity; take min across all segments
+      const caps = pairs.map(({ receipt, delivery }) => {
+        const row = npRows.find(r => r[iRec] === receipt && r[iDel] === delivery)
+        return row ? parseFloat(row[iCap]) : null
+      }).filter((v): v is number => v !== null && !isNaN(v))
+      nameplate[pipe] = caps.length > 0 ? Math.min(...caps) : null
+    }
+  } catch (e) {
+    console.error('Nameplate fetch error:', e)
+  }
+
+  try {
+    // ── Short-term capacity outlook ────────────────────────────────────────
+    const stcRes  = await fetch(STC_URL, { cache: 'no-store' })
+    const stcText = await stcRes.text()
+    const stcLines = stcText.split('\n').filter(l => l.trim())
+    const stcCols  = stcLines[0].split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+    const stcIdxOf = (n: string) => stcCols.findIndex(c => c.toLowerCase().includes(n.toLowerCase()))
+    const iFac  = stcIdxOf('facility')
+    const iRec  = stcIdxOf('receipt')
+    const iDel  = stcIdxOf('delivery')
+    const iCap  = stcIdxOf('capacity')
+    const iDate = stcIdxOf('gasdate')
+    const iType = stcIdxOf('mdq')
+
+    // Use today's date in YYYY/MM/DD format
+    const today = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const todayStr = `${today.getFullYear()}/${pad(today.getMonth()+1)}/${pad(today.getDate())}`
+
+    const stcRows = stcLines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
+      .filter(r => r.length > iCap
+        && (iDate < 0 || r[iDate] === todayStr)
+        && (iType < 0 || r[iType]?.toUpperCase() === 'MDQ'))
+
+    for (const [pipe, pairs] of Object.entries(PIPELINE_NODES)) {
+      const caps = pairs.map(({ receipt, delivery }) => {
+        const row = stcRows.find(r => r[iRec] === receipt && r[iDel] === delivery)
+        return row ? parseFloat(row[iCap]) : null
+      }).filter((v): v is number => v !== null && !isNaN(v) && v > 0)
+      stc[pipe] = caps.length > 0 ? Math.min(...caps) : null
+    }
+  } catch (e) {
+    console.error('STC fetch error:', e)
+  }
+
+  return { nameplate, stc }
 }
 
 // ── Fetch + unzip ─────────────────────────────────────────────────────────────
@@ -183,7 +284,7 @@ function calcPipelineFlow(rows: GbbRow[], rule: PipelineRule): number {
 
 // ── Build timeseries ──────────────────────────────────────────────────────────
 export async function getGbbData(): Promise<GbbTimeseries> {
-  const csvText = await fetchCsvText()
+  const [csvText, capacities] = await Promise.all([fetchCsvText(), fetchCapacities()])
   const allRows = parseCsv(csvText)
 
   if (allRows.length === 0) throw new Error('GBB CSV parsed 0 rows')
@@ -270,6 +371,12 @@ export async function getGbbData(): Promise<GbbTimeseries> {
       // Update direction label based on latest sign
       pipelineFlows[rule.shortName].direction = rule.directionFn(signed)
     }
+  }
+
+  // Attach capacity data to each pipeline entry
+  for (const pipe of Object.keys(pipelineFlows)) {
+    pipelineFlows[pipe].nameplateCapacity = capacities.nameplate[pipe] ?? null
+    pipelineFlows[pipe].stcCapacity       = capacities.stc[pipe]       ?? null
   }
 
   return {

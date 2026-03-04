@@ -27,7 +27,7 @@ interface GbbData {
   largeByState: Record<string, Record<string,(number|null)[]>>
   prodByState:  Record<string, Record<string,(number|null)[]>>
   storageByFacility: Record<string, { state:string; heldInStorage:(number|null)[]; supply:(number|null)[]; demand:(number|null)[] }>
-  pipelineFlows: Record<string, { flow:(number|null)[]; direction:string }>
+  pipelineFlows: Record<string, { flow:(number|null)[]; direction:string; nameplateCapacity:number|null; stcCapacity:number|null }>
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -561,18 +561,26 @@ function PipelinePanel({ dates, pipelineFlows }: {
         }} />
       </div>
 
-      {/* Summary table */}
+      {/* Summary table with utilisation */}
       <div style={{ marginBottom:'1.25rem', overflowX:'auto' }}>
         <table className="sq-table">
           <thead><tr>
             <th>Pipeline</th>
             <th style={{textAlign:'right'}}>Flow (TJ/day)</th>
             <th>Direction</th>
+            <th style={{textAlign:'right'}}>STC util.</th>
+            <th style={{textAlign:'right'}}>Nameplate util.</th>
           </tr></thead>
           <tbody>
             {pipelines.map(p => {
               const val    = latest[p]
               const colour = PIPE_COLOURS[p] ?? 'var(--accent)'
+              const np     = pipelineFlows[p]?.nameplateCapacity ?? null
+              const stc    = pipelineFlows[p]?.stcCapacity       ?? null
+              const npUtil = (val != null && np  != null && np  > 0) ? val / np  : null
+              const stcUtil= (val != null && stc != null && stc > 0) ? val / stc : null
+              const utilColour = (u: number | null) =>
+                u == null ? 'var(--muted)' : u >= 0.9 ? 'var(--negative)' : u >= 0.7 ? 'var(--neutral)' : 'var(--positive)'
               return (
                 <tr key={p}>
                   <td style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
@@ -583,11 +591,27 @@ function PipelinePanel({ dates, pipelineFlows }: {
                     {val != null ? val.toLocaleString('en-AU',{maximumFractionDigits:1}) : '—'}
                   </td>
                   <td style={{ color:'var(--text-2)' }}>→ {pipelineFlows[p]?.direction ?? '—'}</td>
+                  <td style={{ textAlign:'right', fontWeight:600, color: utilColour(stcUtil) }}>
+                    {stcUtil != null ? `${(stcUtil*100).toFixed(0)}%` : '—'}
+                    {stc != null && <span style={{ color:'var(--muted)', fontWeight:400, fontSize:'0.6rem', marginLeft:4 }}>/{stc.toFixed(0)}</span>}
+                  </td>
+                  <td style={{ textAlign:'right', fontWeight:600, color: utilColour(npUtil) }}>
+                    {npUtil != null ? `${(npUtil*100).toFixed(0)}%` : '—'}
+                    {np != null && <span style={{ color:'var(--muted)', fontWeight:400, fontSize:'0.6rem', marginLeft:4 }}>/{np.toFixed(0)}</span>}
+                  </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
+        <div style={{ marginTop:'0.4rem', display:'flex', gap:'1rem', flexWrap:'wrap' }}>
+          {(['var(--positive)','var(--neutral)','var(--negative)'] as const).map((c,i) => (
+            <span key={i} style={{ display:'flex', alignItems:'center', gap:'0.3rem', fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--muted)' }}>
+              <div style={{ width:8, height:8, borderRadius:2, background:c }} />
+              {i===0?'< 70%':i===1?'70–90%':'≥ 90%'}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Group tabs + filter button inline */}
@@ -682,6 +706,45 @@ function PipelinePanel({ dates, pipelineFlows }: {
           ))}
         </LineChart>
       </ResponsiveContainer>
+
+      {/* Nameplate utilisation chart */}
+      {visiblePipes.some(p => pipelineFlows[p]?.nameplateCapacity != null) && (() => {
+        const utilRows = sliced.map((d, i) => {
+          const gi = sliceStart + i
+          const row: Record<string, any> = { date: fmtD(d) }
+          visiblePipes.forEach(p => {
+            const cap = pipelineFlows[p]?.nameplateCapacity
+            const flow = pipelineFlows[p]?.flow[gi]
+            row[p] = (cap != null && cap > 0 && flow != null) ? Math.round((flow / cap) * 1000) / 10 : null
+          })
+          return row
+        })
+        return (
+          <div style={{ marginTop:'1.25rem', paddingTop:'1.25rem', borderTop:'1px solid var(--border)' }}>
+            <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem', marginBottom:'0.75rem' }}>
+              <span style={{ fontWeight:600, fontSize:'0.82rem', color:'var(--text)' }}>Nameplate Capacity Utilisation</span>
+              <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>%</span>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={utilRows} margin={CHART_MARGIN}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="date" {...XAXIS_PROPS} />
+                <YAxis {...YAXIS_PROPS} domain={[0, 110]} tickFormatter={v => `${v}%`} width={42} />
+                <ReferenceLine y={100} stroke="var(--negative)" strokeDasharray="4 2" strokeWidth={1.5} label={{ value:'100%', position:'insideTopRight', fontSize:9, fill:'var(--negative)', fontFamily:'var(--font-data)' }} />
+                <ReferenceLine y={70}  stroke="var(--neutral)"  strokeDasharray="4 2" strokeWidth={1}   label={{ value:'70%',  position:'insideTopRight', fontSize:9, fill:'var(--neutral)',  fontFamily:'var(--font-data)' }} />
+                <Tooltip content={<SqTooltip unit="%" />} />
+                <Legend wrapperStyle={LEGEND_STYLE} />
+                {visiblePipes.filter(p => pipelineFlows[p]?.nameplateCapacity != null).map(p => (
+                  <Line key={p} type="monotone" dataKey={p}
+                    stroke={PIPE_COLOURS[p] ?? 'var(--accent)'} strokeWidth={2}
+                    dot={false} connectNulls activeDot={{r:3,strokeWidth:0}} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )
+      })()}
+
       <RangeControls dates={dates} dateRange={range} onChange={setRange}
         sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
     </div>
