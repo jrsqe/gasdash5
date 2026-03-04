@@ -47,28 +47,35 @@ const STC_URL = 'https://nemweb.com.au/Reports/Current/GBB/GasBBShortTermCapacit
 // Node pairs (receipt→delivery) per pipeline shortName.
 // For pipelines with multiple segments, we take min (bottleneck).
 // Bidirectional pipelines list both directions; we take max flow direction capacity.
-const PIPELINE_NODES: Record<string, { receipt: string; delivery: string }[]> = {
+// For bidirectional pipes we tag each segment with which flow sign it applies to.
+// 'any' = unidirectional (always use this segment).
+// 'positive' = use when flow >= 0,  'negative' = use when flow < 0.
+// For multi-segment unidirectional pipes we take min (bottleneck).
+const PIPELINE_NODES: Record<string, { receipt: string; delivery: string; when?: 'positive'|'negative'|'any' }[]> = {
   'EGP':     [{ receipt: '1302000', delivery: '1202003' }],
-  'MSP':     [{ receipt: '1502045', delivery: '1202052' },   // main forward haul
-              { receipt: '1202038', delivery: '1502057' }],  // reverse
-  'MAPS':    [{ receipt: '1505013', delivery: '1505035' },   // south
-              { receipt: '1505035', delivery: '1505013' }],  // north (reverse)
+  'MSP':     [{ receipt: '1502045', delivery: '1202052', when: 'positive' },
+              { receipt: '1202038', delivery: '1502057', when: 'negative' }],
+  'MAPS':    [{ receipt: '1505013', delivery: '1505035', when: 'positive' },
+              { receipt: '1505035', delivery: '1505013', when: 'negative' }],
   'CGP':     [{ receipt: '1404227', delivery: '1404079' },
               { receipt: '1404225', delivery: '1404074' }],
-  'SWQP':    [{ receipt: '1504232', delivery: '1404216' },
-              { receipt: '1404217', delivery: '1504233' }],
+  'SWQP':    [{ receipt: '1504232', delivery: '1404216', when: 'positive' },
+              { receipt: '1404217', delivery: '1504233', when: 'negative' }],
   'QGP':     [{ receipt: '1404003', delivery: '1404009' }],
   'RBP':     [{ receipt: '1404107', delivery: '1404090' }],
+  // VTS-LMP: always flows West (positive), single segment
   'VTS-LMP': [{ receipt: '1303000', delivery: '1303046' }],
-  'VTS-SWP': [{ receipt: '1303008', delivery: '1303084' },
-              { receipt: '1303084', delivery: '1303007' }],
-  'VTS-VNI': [{ receipt: '1303054', delivery: '1203004' },
-              { receipt: '1203003', delivery: '1303054' }],
+  // VTS-SWP: positive = East (Otway→Wollert), negative = West (Wollert→Brooklyn)
+  'VTS-SWP': [{ receipt: '1303008', delivery: '1303084', when: 'positive' },
+              { receipt: '1303084', delivery: '1303007', when: 'negative' }],
+  // VTS-VNI: positive = South (withdraw from Culcairn), negative = North (inject)
+  'VTS-VNI': [{ receipt: '1303054', delivery: '1203004', when: 'positive' },
+              { receipt: '1203003', delivery: '1303054', when: 'negative' }],
   'TGP':     [{ receipt: '1307000', delivery: '1707012' }],
   'PCA':     [{ receipt: '1305050', delivery: '1505088' }],
 }
 
-async function fetchCapacities(mostRecentGasDate: string): Promise<{
+async function fetchCapacities(mostRecentGasDate: string, latestFlows: Record<string, number | null>): Promise<{
   nameplate: Record<string, number | null>
   stc:       Record<string, number | null>
 }> {
@@ -110,9 +117,15 @@ async function fetchCapacities(mostRecentGasDate: string): Promise<{
     )
 
     for (const [pipe, pairs] of Object.entries(PIPELINE_NODES)) {
-      // Facility name in CSV matches the prefix before '-' for VTS variants
-      const facName = pipe.startsWith('VTS') ? 'VTS' : pipe
-      const caps = pairs.map(({ receipt, delivery }) => {
+      const facName   = pipe.startsWith('VTS') ? 'VTS' : pipe
+      const flowVal   = latestFlows[pipe] ?? null
+      // Filter pairs by direction: 'positive'/'negative' only when we know flow direction
+      const activePairs = pairs.filter(p => {
+        if (!p.when || p.when === 'any') return true
+        if (flowVal === null) return true // include all if no flow data
+        return p.when === 'positive' ? flowVal >= 0 : flowVal < 0
+      })
+      const caps = activePairs.map(({ receipt, delivery }) => {
         const row = npPipe.find(r =>
           r[iNpFac]?.toUpperCase() === facName.toUpperCase() &&
           String(r[iNpRec]).trim() === receipt &&
@@ -152,8 +165,14 @@ async function fetchCapacities(mostRecentGasDate: string): Promise<{
     )
 
     for (const [pipe, pairs] of Object.entries(PIPELINE_NODES)) {
-      const facName = pipe.startsWith('VTS') ? 'VTS' : pipe
-      const caps = pairs.map(({ receipt, delivery }) => {
+      const facName   = pipe.startsWith('VTS') ? 'VTS' : pipe
+      const flowVal   = latestFlows[pipe] ?? null
+      const activePairs = pairs.filter(p => {
+        if (!p.when || p.when === 'any') return true
+        if (flowVal === null) return true
+        return p.when === 'positive' ? flowVal >= 0 : flowVal < 0
+      })
+      const caps = activePairs.map(({ receipt, delivery }) => {
         const row = stcMdq.find(r =>
           r[iStcFac]?.toUpperCase() === facName.toUpperCase() &&
           String(r[iStcRec]).trim() === receipt &&
@@ -324,8 +343,15 @@ export async function getGbbData(): Promise<GbbTimeseries> {
   const mostRecentGasDate = recentDates[recentDates.length - 1] // YYYY-MM-DD
   const rows = allRows.filter(r => recentDates.includes(r.GasDate))
 
-  // Fetch capacities using the most recent gas date for STC matching
-  const capacities = await fetchCapacities(mostRecentGasDate)
+  // Fetch capacities using the most recent gas date and latest flow sign for direction-aware matching
+  const latestFlows: Record<string, number | null> = {}
+  for (const [pipe, entry] of Object.entries(pipelineFlows)) {
+    const flow = entry.flow
+    for (let i = flow.length - 1; i >= 0; i--) {
+      if (flow[i] != null) { latestFlows[pipe] = flow[i]; break }
+    }
+  }
+  const capacities = await fetchCapacities(mostRecentGasDate, latestFlows)
 
   // Helper: get or create array
   const ensureArr = (obj: Record<string, any>, key: string, len: number) => {
