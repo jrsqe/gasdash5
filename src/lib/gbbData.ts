@@ -68,35 +68,58 @@ const PIPELINE_NODES: Record<string, { receipt: string; delivery: string }[]> = 
   'PCA':     [{ receipt: '1305050', delivery: '1505088' }],
 }
 
-async function fetchCapacities(): Promise<{
+async function fetchCapacities(mostRecentGasDate: string): Promise<{
   nameplate: Record<string, number | null>
   stc:       Record<string, number | null>
 }> {
   const nameplate: Record<string, number | null> = {}
   const stc:       Record<string, number | null> = {}
 
+  // Helper: parse CSV text into array-of-objects (case-insensitive header lookup)
+  function parseFlatCsv(text: string) {
+    const lines = text.split('\n').filter(l => l.trim())
+    if (lines.length < 2) return { rows: [], col: (_n: string) => -1 }
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+    const col = (name: string) => {
+      const lo = name.toLowerCase()
+      return headers.findIndex(h => h.toLowerCase() === lo)
+    }
+    const rows = lines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
+    return { rows, col }
+  }
+
   try {
     // ── Nameplate ratings ──────────────────────────────────────────────────
+    // Columns: facilityname, facilitytype, capacitytype, receiptlocation,
+    //          deliverylocation, flowdirection, capacityquantity
     const npRes  = await fetch(NP_URL, { cache: 'no-store' })
     const npText = await npRes.text()
-    const npLines = npText.split('\n').filter(l => l.trim())
-    const npCols  = npLines[0].split(',').map(c => c.trim().replace(/^"|"$/g, ''))
-    const npIdxOf = (n: string) => npCols.findIndex(c => c.toLowerCase().includes(n.toLowerCase()))
-    const iFac  = npIdxOf('facility')
-    const iRec  = npIdxOf('receipt')
-    const iDel  = npIdxOf('delivery')
-    const iCap  = npIdxOf('capacity')
-    const iType = npIdxOf('mdq')   // filter to MDQ rows
+    const { rows: npRows, col: npCol } = parseFlatCsv(npText)
 
-    const npRows = npLines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
-      .filter(r => r.length > iCap && (iType < 0 || r[iType]?.toUpperCase() === 'MDQ'))
+    const iNpFac  = npCol('facilityname')
+    const iNpType = npCol('facilitytype')
+    const iNpCt   = npCol('capacitytype')
+    const iNpRec  = npCol('receiptlocation')
+    const iNpDel  = npCol('deliverylocation')
+    const iNpCap  = npCol('capacityquantity')
+
+    // Filter to PIPE, MDQ rows only
+    const npPipe = npRows.filter(r =>
+      r[iNpType]?.toUpperCase() === 'PIPE' &&
+      r[iNpCt]?.toUpperCase()   === 'MDQ'
+    )
 
     for (const [pipe, pairs] of Object.entries(PIPELINE_NODES)) {
-      // For each pair, find the matching nameplate row capacity; take min across all segments
+      // Facility name in CSV matches the prefix before '-' for VTS variants
+      const facName = pipe.startsWith('VTS') ? 'VTS' : pipe
       const caps = pairs.map(({ receipt, delivery }) => {
-        const row = npRows.find(r => r[iRec] === receipt && r[iDel] === delivery)
-        return row ? parseFloat(row[iCap]) : null
-      }).filter((v): v is number => v !== null && !isNaN(v))
+        const row = npPipe.find(r =>
+          r[iNpFac]?.toUpperCase() === facName.toUpperCase() &&
+          String(r[iNpRec]).trim() === receipt &&
+          String(r[iNpDel]).trim() === delivery
+        )
+        return row ? parseFloat(row[iNpCap]) : null
+      }).filter((v): v is number => v !== null && !isNaN(v) && v > 0)
       nameplate[pipe] = caps.length > 0 ? Math.min(...caps) : null
     }
   } catch (e) {
@@ -105,32 +128,38 @@ async function fetchCapacities(): Promise<{
 
   try {
     // ── Short-term capacity outlook ────────────────────────────────────────
+    // Columns: FacilityId, FacilityName, CapacityType, FlowDirection,
+    //          GasDate (YYYY/MM/DD), OutlookQuantity, ReceiptLocation, DeliveryLocation
+    // We want the row matching the most recent GBB gas date (same date as flow data)
     const stcRes  = await fetch(STC_URL, { cache: 'no-store' })
     const stcText = await stcRes.text()
-    const stcLines = stcText.split('\n').filter(l => l.trim())
-    const stcCols  = stcLines[0].split(',').map(c => c.trim().replace(/^"|"$/g, ''))
-    const stcIdxOf = (n: string) => stcCols.findIndex(c => c.toLowerCase().includes(n.toLowerCase()))
-    const iFac  = stcIdxOf('facility')
-    const iRec  = stcIdxOf('receipt')
-    const iDel  = stcIdxOf('delivery')
-    const iCap  = stcIdxOf('capacity')
-    const iDate = stcIdxOf('gasdate')
-    const iType = stcIdxOf('mdq')
+    const { rows: stcRows, col: stcCol } = parseFlatCsv(stcText)
 
-    // Use today's date in YYYY/MM/DD format
-    const today = new Date()
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const todayStr = `${today.getFullYear()}/${pad(today.getMonth()+1)}/${pad(today.getDate())}`
+    const iStcFac  = stcCol('FacilityName')
+    const iStcCt   = stcCol('CapacityType')
+    const iStcDate = stcCol('GasDate')
+    const iStcRec  = stcCol('ReceiptLocation')
+    const iStcDel  = stcCol('DeliveryLocation')
+    const iStcCap  = stcCol('OutlookQuantity')
 
-    const stcRows = stcLines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
-      .filter(r => r.length > iCap
-        && (iDate < 0 || r[iDate] === todayStr)
-        && (iType < 0 || r[iType]?.toUpperCase() === 'MDQ'))
+    // Most recent GBB gas date is YYYY-MM-DD — convert to YYYY/MM/DD for STC match
+    const targetDate = mostRecentGasDate.replace(/-/g, '/')
+
+    // Filter to MDQ rows for the target date
+    const stcMdq = stcRows.filter(r =>
+      r[iStcCt]?.toUpperCase()   === 'MDQ' &&
+      r[iStcDate]?.trim()        === targetDate
+    )
 
     for (const [pipe, pairs] of Object.entries(PIPELINE_NODES)) {
+      const facName = pipe.startsWith('VTS') ? 'VTS' : pipe
       const caps = pairs.map(({ receipt, delivery }) => {
-        const row = stcRows.find(r => r[iRec] === receipt && r[iDel] === delivery)
-        return row ? parseFloat(row[iCap]) : null
+        const row = stcMdq.find(r =>
+          r[iStcFac]?.toUpperCase() === facName.toUpperCase() &&
+          String(r[iStcRec]).trim() === receipt &&
+          String(r[iStcDel]).trim() === delivery
+        )
+        return row ? parseFloat(row[iStcCap]) : null
       }).filter((v): v is number => v !== null && !isNaN(v) && v > 0)
       stc[pipe] = caps.length > 0 ? Math.min(...caps) : null
     }
@@ -284,15 +313,19 @@ function calcPipelineFlow(rows: GbbRow[], rule: PipelineRule): number {
 
 // ── Build timeseries ──────────────────────────────────────────────────────────
 export async function getGbbData(): Promise<GbbTimeseries> {
-  const [csvText, capacities] = await Promise.all([fetchCsvText(), fetchCapacities()])
+  const csvText = await fetchCsvText()
   const allRows = parseCsv(csvText)
 
   if (allRows.length === 0) throw new Error('GBB CSV parsed 0 rows')
 
   // Only keep the last 31 days to match the dashboard window
-  const allDates = Array.from(new Set(allRows.map(r => r.GasDate))).sort()
+  const allDates    = Array.from(new Set(allRows.map(r => r.GasDate))).sort()
   const recentDates = allDates.slice(-365)
+  const mostRecentGasDate = recentDates[recentDates.length - 1] // YYYY-MM-DD
   const rows = allRows.filter(r => recentDates.includes(r.GasDate))
+
+  // Fetch capacities using the most recent gas date for STC matching
+  const capacities = await fetchCapacities(mostRecentGasDate)
 
   // Helper: get or create array
   const ensureArr = (obj: Record<string, any>, key: string, len: number) => {
