@@ -35,7 +35,7 @@ const fmt1 = (v: number|null|undefined) =>
 const fmt0 = (v: number|null|undefined) =>
   v == null ? '—' : v.toLocaleString('en-AU', { maximumFractionDigits:0 })
 
-function fmtD(d: string) { const [,mm,dd] = d.split('-'); return `${dd}/${mm}` }
+function fmtD(d: string) { const [yyyy,mm,dd] = d.split('-'); return `${dd}/${mm}/${(yyyy??'').slice(2)}` }
 
 function lastVal(arr: (number|null)[]): number|null {
   for (let i = arr.length-1; i >= 0; i--) if (arr[i] != null) return arr[i]
@@ -74,10 +74,10 @@ function SqTooltip({ active, payload, label, unit }: any) {
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background:'var(--sq-slate-2)', border:'1px solid var(--sq-border-2)',
+      background:'var(--sq-surface)', border:'1px solid var(--sq-border)',
       borderRadius:8, padding:'0.65rem 0.9rem',
       fontFamily:'var(--font-data)', fontSize:'0.75rem',
-      minWidth:190, boxShadow:'0 8px 32px rgba(0,0,0,0.4)',
+      minWidth:190, boxShadow:'0 4px 16px rgba(13,27,42,0.12)',
     }}>
       <div style={{ color:'var(--sq-muted)', marginBottom:'0.4rem', fontSize:'0.62rem', letterSpacing:'0.04em' }}>{label}</div>
       {payload.filter((p: any) => p.value != null).map((p: any) => (
@@ -137,7 +137,7 @@ function PillGroup<T extends string>({ label, options, value, onChange }: {
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'0.4rem' }}>
       {label && <span style={{ color:'var(--sq-muted)', fontSize:'0.62rem', fontFamily:'var(--font-data)', whiteSpace:'nowrap', letterSpacing:'0.05em', textTransform:'uppercase' }}>{label}</span>}
-      <div style={{ display:'flex', background:'var(--sq-navy-2)', border:'1px solid var(--sq-border)', borderRadius:8, padding:2, gap:2 }}>
+      <div style={{ display:'flex', background:'var(--sq-surface-2)', border:'1px solid var(--sq-border)', borderRadius:8, padding:2, gap:2 }}>
         {options.map(opt => {
           const active = opt.value === value
           return (
@@ -145,7 +145,7 @@ function PillGroup<T extends string>({ label, options, value, onChange }: {
               padding:'0.25rem 0.65rem', borderRadius:6, border:'none', cursor:'pointer',
               fontFamily:'var(--font-ui)', fontSize:'0.72rem', fontWeight: active ? 600 : 400,
               background: active ? 'var(--sq-teal)' : 'transparent',
-              color: active ? 'var(--sq-navy)' : 'var(--sq-muted)', transition:'all 0.15s',
+              color: active ? '#fff' : 'var(--sq-muted)', transition:'all 0.15s',
             }}>{opt.label}</button>
           )
         })}
@@ -161,13 +161,13 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
     <div style={{ marginTop:'0.85rem' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.3rem' }}>
         <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--sq-muted)' }}>{firstLabel}</span>
-        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--sq-teal)', background:'var(--sq-navy-2)', border:'1px solid var(--sq-border)', padding:'1px 7px', borderRadius:4, fontWeight:600 }}>
+        <span style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--sq-teal)', background:'var(--sq-surface-2)', border:'1px solid var(--sq-border)', padding:'1px 7px', borderRadius:4, fontWeight:600 }}>
           {windowStartLabel} → {windowEndLabel}
         </span>
         <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--sq-muted)' }}>{lastLabel}</span>
       </div>
       <div style={{ position:'relative', height:22, display:'flex', alignItems:'center' }}>
-        <div style={{ position:'absolute', left:0, right:0, height:4, background:'var(--sq-navy-2)', border:'1px solid var(--sq-border)', borderRadius:2 }} />
+        <div style={{ position:'absolute', left:0, right:0, height:4, background:'var(--sq-surface-2)', border:'1px solid var(--sq-border)', borderRadius:2 }} />
         <div style={{
           position:'absolute',
           left: `${((windowEnd-windowSize+1)/(totalRows-1))*100}%`,
@@ -179,7 +179,7 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
         <div style={{
           position:'absolute', left:`calc(${((windowEnd-min)/(max-min))*100}% - 6px)`,
           width:12, height:12, borderRadius:'50%',
-          background:'var(--sq-navy)', border:'2px solid var(--sq-teal)',
+          background:'var(--sq-surface)', border:'2px solid var(--sq-teal)',
           boxShadow:'0 0 6px var(--sq-teal-glow)', pointerEvents:'none', transition:'left 0.08s',
         }} />
       </div>
@@ -385,7 +385,7 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
       </div>
 
       {showFilter && (
-        <div style={{ background:'var(--sq-navy-2)', border:'1px solid var(--sq-border)', borderRadius:8, padding:'0.65rem', marginBottom:'0.85rem' }}>
+        <div style={{ background:'var(--sq-surface-2)', border:'1px solid var(--sq-border)', borderRadius:8, padding:'0.65rem', marginBottom:'0.85rem' }}>
           <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.5rem' }}>
             <button onClick={() => setSelected(new Set())} style={{ fontSize:'0.65rem', padding:'2px 8px', borderRadius:4, border:'1px solid var(--sq-border)', background:'transparent', color:'var(--sq-teal)', cursor:'pointer' }}>All</button>
             <button onClick={() => setSelected(new Set(allFacilities))} style={{ fontSize:'0.65rem', padding:'2px 8px', borderRadius:4, border:'1px solid var(--sq-border)', background:'transparent', color:'var(--sq-muted)', cursor:'pointer' }}>None</button>
@@ -398,7 +398,7 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
                   padding:'2px 9px', borderRadius:20, border:'none', cursor:'pointer',
                   fontFamily:'var(--font-data)', fontSize:'0.65rem', fontWeight: on ? 600 : 400,
                   background: on ? PALETTE[i%PALETTE.length] : 'var(--sq-border)',
-                  color: on ? 'var(--sq-navy)' : 'var(--sq-muted)', transition:'all 0.1s',
+                  color: on ? '#fff' : 'var(--sq-muted)', transition:'all 0.1s',
                 }}>{f}</button>
               )
             })}
@@ -495,7 +495,7 @@ function PipelinePanel({ dates, pipelineFlows }: {
         {activePipes.map(p => (
           <div key={p} style={{
             display:'flex', alignItems:'center', gap:'0.3rem',
-            background:'var(--sq-navy-2)', border:`1px solid ${PIPE_COLOURS[p] ?? 'var(--sq-border)'}`,
+            background:'var(--sq-surface-2)', border:`1px solid ${PIPE_COLOURS[p] ?? 'var(--sq-border)'}`,
             borderRadius:5, padding:'2px 8px',
             fontFamily:'var(--font-data)', fontSize:'0.65rem',
           }}>

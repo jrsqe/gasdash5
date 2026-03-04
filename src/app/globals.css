@@ -3,25 +3,26 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* Squadron Energy brand — dark theme matching squadronenergy.com */
-  --sq-bg:         #0A1520;  /* deep page background */
-  --sq-navy:       #0D1B2A;  /* card/header background */
-  --sq-navy-2:     #122030;  /* slightly lighter navy */
-  --sq-slate:      #1A2E42;  /* card surface */
-  --sq-slate-2:    #1F3548;  /* elevated surface */
-  --sq-border:     #243D54;  /* borders */
-  --sq-border-2:   #2E4D65;  /* lighter border on hover */
+  --sq-bg:         #F0F3F7;
+  --sq-surface:    #FFFFFF;
+  --sq-surface-2:  #F7F9FB;
+  --sq-navy:       #FFFFFF;
+  --sq-navy-2:     #F0F3F7;
+  --sq-slate:      #FFFFFF;
+  --sq-slate-2:    #F7F9FB;
+  --sq-border:     #DDE3EA;
+  --sq-border-2:   #C8D2DC;
 
-  --sq-teal:       #00B4A0;  /* primary brand accent */
-  --sq-teal-dim:   #008C7C;  /* darker teal */
-  --sq-teal-glow:  rgba(0,180,160,0.12);
-  --sq-green:      #3DDC84;  /* positive/supply */
-  --sq-orange:     #FF6B35;  /* price/alert */
-  --sq-red:        #E8425A;  /* negative */
+  --sq-teal:       #007A6E;
+  --sq-teal-dim:   #005F55;
+  --sq-teal-glow:  rgba(0,122,110,0.08);
+  --sq-green:      #1A7A45;
+  --sq-orange:     #C45000;
+  --sq-red:        #C0182F;
 
-  --sq-text:       #E4EEF7;  /* primary text */
-  --sq-text-2:     #A8C0D4;  /* secondary text */
-  --sq-muted:      #5E7D96;  /* muted labels */
+  --sq-text:       #0D1B2A;
+  --sq-text-2:     #2E4A62;
+  --sq-muted:      #6B8299;
 
   --font-ui:       'Archivo', sans-serif;
   --font-data:     'Archivo Narrow', sans-serif;
@@ -38,9 +39,8 @@ html, body {
   font-size: 14px;
 }
 
-/* ── Cards ── */
 .sq-card {
-  background: var(--sq-slate);
+  background: var(--sq-surface);
   border: 1px solid var(--sq-border);
   border-radius: var(--radius);
   position: relative;
@@ -54,40 +54,30 @@ html, body {
   background: linear-gradient(90deg, var(--sq-teal) 0%, transparent 70%);
 }
 
-/* ── Stat cards ── */
 .sq-stat {
-  background: var(--sq-navy-2);
+  background: var(--sq-surface-2);
   border: 1px solid var(--sq-border);
   border-radius: var(--radius-sm);
   padding: 1rem 1.25rem;
   transition: border-color 0.2s, background 0.2s;
 }
-.sq-stat:hover { border-color: var(--sq-teal); background: var(--sq-slate-2); }
+.sq-stat:hover { border-color: var(--sq-teal); }
 .sq-stat-label {
   font-family: var(--font-data);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--sq-muted);
-  margin-bottom: 0.4rem;
+  font-size: 0.6rem; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--sq-muted); margin-bottom: 0.35rem;
 }
 .sq-stat-value {
   font-family: var(--font-data);
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--sq-text);
-  letter-spacing: -0.02em;
-  line-height: 1;
+  font-size: 1.35rem; font-weight: 700;
+  color: var(--sq-text); letter-spacing: -0.02em; line-height: 1;
 }
 .sq-stat-sub {
   font-family: var(--font-data);
-  font-size: 0.68rem;
-  color: var(--sq-muted);
-  margin-top: 0.3rem;
+  font-size: 0.65rem; color: var(--sq-muted); margin-top: 0.3rem;
 }
 
-/* ── Tables ── */
 .sq-table { width: 100%; border-collapse: collapse; font-family: var(--font-data); font-size: 0.78rem; }
 .sq-table thead tr { border-bottom: 1px solid var(--sq-border); }
 .sq-table th {
@@ -99,11 +89,9 @@ html, body {
 .sq-table tbody tr:hover { background: var(--sq-teal-glow); }
 .sq-table tbody tr:last-child td { border-bottom: none; }
 
-/* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--sq-bg); }
 ::-webkit-scrollbar-thumb { background: var(--sq-border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--sq-border-2); }
 
-/* ── Range input ── */
 input[type=range] { accent-color: var(--sq-teal); }

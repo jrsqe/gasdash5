@@ -72,8 +72,9 @@ export default function MainDashboard() {
     <div style={{ minHeight: '100vh', background: 'var(--sq-bg)' }}>
       {/* Header */}
       <header style={{
-        background: 'var(--sq-navy)',
+        background: 'var(--sq-surface)',
         borderBottom: '1px solid var(--sq-border)',
+        boxShadow: '0 1px 4px rgba(13,27,42,0.06)',
         position: 'sticky', top: 0, zIndex: 100,
         padding: '0 1.75rem',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -107,7 +108,7 @@ export default function MainDashboard() {
 
       {/* Top-level tabs */}
       <div style={{
-        background: 'var(--sq-navy)',
+        background: 'var(--sq-surface)',
         borderBottom: '1px solid var(--sq-border)',
         padding: '0 1.75rem',
         display: 'flex', gap: 0,
@@ -143,7 +144,7 @@ export default function MainDashboard() {
 
       <footer style={{
         borderTop: '1px solid var(--sq-border)',
-        background: 'var(--sq-navy)',
+        background: 'var(--sq-surface)',
         padding: '0.75rem 1.75rem',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>

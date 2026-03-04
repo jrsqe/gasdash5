@@ -50,8 +50,9 @@ function tickFmt(val: string) {
   if (!val) return ''
   const [date, time] = val.split(' ')
   if (!date || !time) return val
-  const [,mm,dd] = date.split('-')
-  return `${dd}/${mm} ${time}`
+  const [yyyy,mm,dd] = date.split('-')
+  const yy = yyyy?.slice(2) ?? ''
+  return `${dd}/${mm}/${yy} ${time}`
 }
 
 // ── Shared UI atoms ────────────────────────────────────────────────────────────
@@ -60,8 +61,9 @@ function SqTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background: 'var(--sq-slate-2)', border: '1px solid var(--sq-border-2)',
+      background: 'var(--sq-surface)', border: '1px solid var(--sq-border)',
       borderRadius: 8, padding: '0.65rem 0.9rem',
+      boxShadow: '0 4px 16px rgba(13,27,42,0.12)',
       fontFamily: 'var(--font-data)', fontSize: '0.75rem',
       minWidth: 200, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     }}>
@@ -94,7 +96,7 @@ function PillGroup<T extends string>({
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
       {label && <span style={{ color: 'var(--sq-muted)', fontSize: '0.65rem', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>}
-      <div style={{ display: 'flex', background: 'var(--sq-navy-2)', border: '1px solid var(--sq-border)', borderRadius: 8, padding: 2, gap: 2 }}>
+      <div style={{ display: 'flex', background: 'var(--sq-surface-2)', border: '1px solid var(--sq-border)', borderRadius: 8, padding: 2, gap: 2 }}>
         {options.map(opt => {
           const active = opt.value === value
           return (
@@ -103,7 +105,7 @@ function PillGroup<T extends string>({
               cursor: disabled ? 'not-allowed' : 'pointer',
               fontFamily: 'var(--font-ui)', fontSize: '0.75rem', fontWeight: active ? 600 : 400,
               background: active ? 'var(--sq-teal)' : 'transparent',
-              color: active ? 'var(--sq-navy)' : 'var(--sq-muted)',
+              color: active ? '#fff' : 'var(--sq-muted)',
               transition: 'all 0.15s', opacity: disabled ? 0.4 : 1,
             }}>{opt.label}</button>
           )
@@ -120,13 +122,13 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
     <div style={{ marginTop: '0.85rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--sq-muted)' }}>{firstLabel}</span>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: 'var(--sq-teal)', background: 'var(--sq-navy-2)', border: '1px solid var(--sq-border)', padding: '1px 8px', borderRadius: 5, fontWeight: 600 }}>
+        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: 'var(--sq-teal)', background: 'var(--sq-surface-2)', border: '1px solid var(--sq-border)', padding: '1px 8px', borderRadius: 5, fontWeight: 600 }}>
           {windowStartLabel} → {windowEndLabel}
         </span>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--sq-muted)' }}>{lastLabel}</span>
       </div>
       <div style={{ position: 'relative', height: 24, display: 'flex', alignItems: 'center' }}>
-        <div style={{ position: 'absolute', left: 0, right: 0, height: 4, background: 'var(--sq-navy-2)', border: '1px solid var(--sq-border)', borderRadius: 2 }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, height: 4, background: 'var(--sq-surface-2)', border: '1px solid var(--sq-border)', borderRadius: 2 }} />
         <div style={{
           position: 'absolute',
           left:  `${((windowEnd - windowSize + 1) / (totalRows - 1)) * 100}%`,
@@ -138,8 +140,8 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
         <div style={{
           position: 'absolute', left: `calc(${((windowEnd - min) / (max - min)) * 100}% - 7px)`,
           width: 14, height: 14, borderRadius: '50%',
-          background: 'var(--sq-navy)', border: '2px solid var(--sq-teal)',
-          boxShadow: '0 0 8px var(--sq-teal-glow)', pointerEvents: 'none', transition: 'left 0.08s',
+          background: 'var(--sq-surface)', border: '2px solid var(--sq-teal)',
+          boxShadow: '0 0 6px var(--sq-teal-glow)', pointerEvents: 'none', transition: 'left 0.08s',
         }} />
       </div>
     </div>
@@ -315,7 +317,8 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
     <div style={{ background:'var(--sq-bg)' }}>
       {/* Sub-header: region tabs + interval */}
       <div style={{
-        background:'var(--sq-navy)', borderBottom:'1px solid var(--sq-border)',
+        background:'var(--sq-surface)', borderBottom:'1px solid var(--sq-border)',
+        boxShadow:'0 1px 3px rgba(13,27,42,0.05)',
         padding:'0 1.75rem', display:'flex', alignItems:'center',
         justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem',
       }}>
@@ -349,7 +352,7 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
         {error ? (
           <div className="sq-card" style={{ padding:'1.5rem', maxWidth:480 }}>
             <div style={{ color:'var(--sq-red)', fontFamily:'var(--font-data)', fontSize:'0.75rem', marginBottom:'0.4rem', fontWeight:600 }}>ERROR</div>
-            <div style={{ color:'var(--sq-text-2)', fontSize:'0.82rem' }}>{error}</div>
+            <div style={{ color:'var(--sq-text)', fontSize:'0.82rem' }}>{error}</div>
           </div>
         ) : loading && !payload ? (
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'5rem 0', gap:'1rem' }}>
