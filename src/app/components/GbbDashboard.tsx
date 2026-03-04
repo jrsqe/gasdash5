@@ -24,6 +24,7 @@ const STATE_COLOURS: Record<string,string> = { NSW:'var(--nsw)', VIC:'var(--vic)
 interface GbbData {
   dates: string[]
   gpgByState:   Record<string, Record<string,(number|null)[]>>
+  largeByState: Record<string, Record<string,(number|null)[]>>
   prodByState:  Record<string, Record<string,(number|null)[]>>
   storageByFacility: Record<string, { state:string; heldInStorage:(number|null)[]; supply:(number|null)[]; demand:(number|null)[] }>
   pipelineFlows: Record<string, { flow:(number|null)[]; direction:string }>
@@ -254,45 +255,94 @@ const LEGEND_STYLE = { fontSize:'0.65rem', fontFamily:'var(--font-data)', paddin
 const CHART_MARGIN = { top:4, right:12, left:0, bottom:4 }
 
 // ── GPG Panel ─────────────────────────────────────────────────────────────────
-function GpgPanel({ dates, gpgByState }: { dates:string[]; gpgByState: Record<string, Record<string,(number|null)[]>> }) {
-  const states = Object.keys(gpgByState).sort()
-  const [state, setState]   = useState(states[0] ?? 'NSW')
-  const [range, setRange]   = useState<DateRangeOption>('all')
+type DemandType = 'gpg' | 'large'
+
+function GpgPanel({ dates, gpgByState, largeByState }: {
+  dates: string[]
+  gpgByState:   Record<string, Record<string,(number|null)[]>>
+  largeByState: Record<string, Record<string,(number|null)[]>>
+}) {
+  const [demandType, setDemandType] = useState<DemandType>('gpg')
+  const activeData = demandType === 'gpg' ? gpgByState : largeByState
+  const states     = Object.keys(activeData).sort()
+  const [state, setState] = useState(states[0] ?? 'NSW')
+  const [range, setRange] = useState<DateRangeOption>('all')
   const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(dates, range)
 
-  useEffect(() => { if (!states.includes(state)) setState(states[0] ?? '') }, [states])
+  useEffect(() => {
+    const s = Object.keys(activeData).sort()
+    // Default to NSW if available, otherwise first state
+    const preferred = s.includes('NSW') ? 'NSW' : (s[0] ?? '')
+    setState(preferred)
+  }, [demandType])
 
-  const facilities = Object.keys(gpgByState[state] ?? {})
-  const series     = gpgByState[state] ?? {}
+  const facilities = Object.keys(activeData[state] ?? {})
+  const series     = activeData[state] ?? {}
 
   const rows = sliced.map((d,i) => {
     const gi = sliceStart+i
     return { date: fmtD(d), ...Object.fromEntries(facilities.map(f => [f, series[f]?.[gi] ?? null])) }
   })
 
+  const title    = demandType === 'gpg' ? 'GPG Gas Demand' : 'Large Industry Gas Demand'
+  const csvName  = demandType === 'gpg' ? `gpg-demand-${state}.csv` : `large-industry-demand-${state}.csv`
+
+  const DEMAND_TABS: { value: DemandType; label: string }[] = [
+    { value: 'gpg',   label: 'Gas Power Generation' },
+    { value: 'large', label: 'Large Industry' },
+  ]
+
   return (
     <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
+      {/* Title row */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1rem' }}>
         <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
-          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>GPG Gas Demand</h3>
+          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>{title}</h3>
           <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
         </div>
-        <CsvButton onClick={() => downloadCsv(rows, `gpg-demand-${state}.csv`)} />
+        <CsvButton onClick={() => downloadCsv(rows, csvName)} />
       </div>
+
+      {/* Demand type tabs */}
+      <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:'1rem' }}>
+        {DEMAND_TABS.map(tab => {
+          const isActive = tab.value === demandType
+          return (
+            <button key={tab.value} onClick={() => setDemandType(tab.value)} style={{
+              padding:'0.4rem 0.9rem', border:'none', background:'transparent',
+              cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.78rem',
+              fontWeight: isActive ? 600 : 400,
+              color: isActive ? 'var(--accent)' : 'var(--muted)',
+              borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+              marginBottom:-1, transition:'all 0.15s',
+            }}>{tab.label}</button>
+          )
+        })}
+      </div>
+
+      {/* State tabs — only if multiple states available */}
       {states.length > 1 && <StateTabs states={states} active={state} onChange={setState} />}
-      <ResponsiveContainer width="100%" height={240}>
-        <BarChart data={rows} margin={CHART_MARGIN}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-          <XAxis dataKey="date" {...XAXIS_PROPS} />
-          <YAxis {...YAXIS_PROPS} />
-          <Tooltip content={<SqTooltip unit="TJ" />} />
-          <Legend wrapperStyle={LEGEND_STYLE} />
-          {facilities.map((f,i) => (
-            <Bar key={f} dataKey={f} stackId="g" fill={PALETTE[i%PALETTE.length]}
-              radius={i === facilities.length-1 ? [2,2,0,0] : [0,0,0,0]} />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
+
+      {facilities.length === 0 ? (
+        <div style={{ padding:'2rem', textAlign:'center', color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.75rem' }}>
+          No data available for {state}
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={rows} margin={CHART_MARGIN}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <XAxis dataKey="date" {...XAXIS_PROPS} />
+            <YAxis {...YAXIS_PROPS} />
+            <Tooltip content={<SqTooltip unit="TJ" />} />
+            <Legend wrapperStyle={LEGEND_STYLE} />
+            {facilities.map((f,i) => (
+              <Bar key={f} dataKey={f} stackId="g" fill={PALETTE[i%PALETTE.length]}
+                radius={i === facilities.length-1 ? [2,2,0,0] : [0,0,0,0]} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+
       <RangeControls dates={dates} dateRange={range} onChange={setRange}
         sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
     </div>
@@ -671,7 +721,7 @@ export default function GbbDashboard() {
           </span>
         </div>
       )}
-      <GpgPanel        dates={data.dates} gpgByState={data.gpgByState} />
+      <GpgPanel        dates={data.dates} gpgByState={data.gpgByState} largeByState={data.largeByState ?? {}} />
       <StoragePanel    dates={data.dates} storageByFacility={data.storageByFacility} />
       <ProductionPanel dates={data.dates} prodByState={data.prodByState} />
       <PipelinePanel   dates={data.dates} pipelineFlows={data.pipelineFlows} />

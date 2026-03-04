@@ -29,6 +29,7 @@ export interface GbbRow {
 export interface GbbTimeseries {
   dates:             string[]
   gpgByState:        Record<string, Record<string, number[]>>
+  largeByState:      Record<string, Record<string, number[]>>
   prodByState:       Record<string, Record<string, number[]>>
   storageByFacility: Record<string, {
     state:         string
@@ -207,6 +208,15 @@ export async function getGbbData(): Promise<GbbTimeseries> {
     if (i >= 0) arr[i] = (arr[i] ?? 0) + (row.Demand ?? 0)
   }
 
+  // ── Large industry demand: BBLARGE, NSW + VIC ──
+  const largeByState: GbbTimeseries['largeByState'] = {}
+  for (const row of rows.filter(r => r.FacilityType === 'BBLARGE' && ['NSW', 'VIC', 'QLD', 'SA'].includes(r.State))) {
+    if (!largeByState[row.State]) largeByState[row.State] = {}
+    const arr = ensureArr(largeByState[row.State], row.FacilityName, recentDates.length)
+    const i   = recentDates.indexOf(row.GasDate)
+    if (i >= 0) arr[i] = (arr[i] ?? 0) + (row.Demand ?? 0)
+  }
+
   // ── Production: PROD, NSW + VIC + SA + QLD ──
   const prodByState: GbbTimeseries['prodByState'] = {}
   for (const row of rows.filter(r => r.FacilityType === 'PROD' && ['NSW', 'VIC', 'SA', 'QLD'].includes(r.State))) {
@@ -265,6 +275,7 @@ export async function getGbbData(): Promise<GbbTimeseries> {
   return {
     dates:             recentDates,
     gpgByState,
+    largeByState,
     prodByState,
     storageByFacility,
     pipelineFlows,
