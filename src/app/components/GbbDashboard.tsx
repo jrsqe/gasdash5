@@ -35,6 +35,36 @@ const fmt1 = (v: number|null|undefined) =>
 const fmt0 = (v: number|null|undefined) =>
   v == null ? '—' : v.toLocaleString('en-AU', { maximumFractionDigits:0 })
 
+
+function downloadCsv(rows: Record<string, any>[], filename: string) {
+  if (!rows.length) return
+  const cols = Object.keys(rows[0])
+  const csv  = [cols.join(','), ...rows.map(r => cols.map(c => r[c] ?? '').join(','))].join('\n')
+  const a    = document.createElement('a')
+  a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+function CsvButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick} title="Download CSV" style={{
+      display: 'flex', alignItems: 'center', gap: '0.3rem',
+      padding: '0.25rem 0.65rem', borderRadius: 6,
+      border: '1px solid var(--sq-border)', background: 'var(--sq-surface-2)',
+      color: 'var(--sq-muted)', cursor: 'pointer',
+      fontFamily: 'var(--font-data)', fontSize: '0.65rem', fontWeight: 500,
+      transition: 'border-color 0.15s, color 0.15s',
+    }}
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--sq-teal)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--sq-teal)' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--sq-border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--sq-muted)' }}
+    >
+      ↓ CSV
+    </button>
+  )
+}
+
 function fmtD(d: string) { const [yyyy,mm,dd] = d.split('-'); return `${dd}/${mm}/${(yyyy??'').slice(2)}` }
 
 function lastVal(arr: (number|null)[]): number|null {
@@ -242,9 +272,12 @@ function GpgPanel({ dates, gpgByState }: { dates:string[]; gpgByState: Record<st
 
   return (
     <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
-      <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem', marginBottom:'1rem' }}>
-        <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>GPG Gas Demand</h3>
-        <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1rem' }}>
+        <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
+          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>GPG Gas Demand</h3>
+          <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
+        </div>
+        <CsvButton onClick={() => downloadCsv(rows, `gpg-demand-${state}.csv`)} />
       </div>
       {states.length > 1 && <StateTabs states={states} active={state} onChange={setState} />}
       <ResponsiveContainer width="100%" height={240}>
@@ -298,9 +331,12 @@ function StoragePanel({ dates, storageByFacility }: {
   return (
     <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
-        <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
-          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Storage</h3>
-          <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ</span>
+        <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+          <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
+            <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Storage</h3>
+            <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ</span>
+          </div>
+          <CsvButton onClick={() => downloadCsv(metric === 'level' ? levelRows : flowRows, `storage-${state}-${metric}.csv`)} />
         </div>
         <PillGroup
           options={[{value:'level',label:'Level'},{value:'flow',label:'Inject/Withdraw'}] as {value:'level'|'flow';label:string}[]}
@@ -373,15 +409,18 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
           <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Production</h3>
           <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
         </div>
-        <button onClick={() => setShowFilter(v => !v)} style={{
-          padding:'0.25rem 0.65rem', borderRadius:6,
-          border: `1px solid ${showFilter ? 'var(--sq-teal)' : 'var(--sq-border)'}`,
-          background: showFilter ? 'var(--sq-teal-glow)' : 'transparent',
-          color: showFilter ? 'var(--sq-teal)' : 'var(--sq-muted)',
-          cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.72rem', fontWeight:500,
-        }}>
-          {selected.size > 0 ? `${active.length}/${allFacilities.length} shown` : 'Filter'}
-        </button>
+        <div style={{ display:'flex', gap:'0.4rem' }}>
+          <CsvButton onClick={() => downloadCsv(rows, `production-${state}.csv`)} />
+          <button onClick={() => setShowFilter(v => !v)} style={{
+            padding:'0.25rem 0.65rem', borderRadius:6,
+            border: `1px solid ${showFilter ? 'var(--sq-teal)' : 'var(--sq-border)'}`,
+            background: showFilter ? 'var(--sq-teal-glow)' : 'transparent',
+            color: showFilter ? 'var(--sq-teal)' : 'var(--sq-muted)',
+            cursor:'pointer', fontFamily:'var(--font-ui)', fontSize:'0.72rem', fontWeight:500,
+          }}>
+            {selected.size > 0 ? `${active.length}/${allFacilities.length} shown` : 'Filter'}
+          </button>
+        </div>
       </div>
 
       {showFilter && (
@@ -454,9 +493,15 @@ function PipelinePanel({ dates, pipelineFlows }: {
 
   return (
     <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
-      <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem', marginBottom:'1.25rem' }}>
-        <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Pipeline Flows</h3>
-        <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day · GBB</span>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1.25rem' }}>
+        <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
+          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Pipeline Flows</h3>
+          <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day · GBB</span>
+        </div>
+        <CsvButton onClick={() => {
+          const allRows = dates.map((d, i) => ({ date: fmtD(d), ...Object.fromEntries(pipelines.map(p => [p, pipelineFlows[p]?.flow[i] ?? ''])) }))
+          downloadCsv(allRows, 'pipeline-flows.csv')
+        }} />
       </div>
 
       {/* Summary table */}

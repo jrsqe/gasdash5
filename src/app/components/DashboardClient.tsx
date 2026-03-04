@@ -46,6 +46,36 @@ const fmt = (v: number|null, d=0) =>
   v == null ? '—' : v.toLocaleString('en-AU', { minimumFractionDigits: d, maximumFractionDigits: d })
 const fmtP = (v: number|null) => v == null ? '—' : `$${fmt(v,2)}`
 
+
+function downloadCsv(rows: Record<string, any>[], filename: string) {
+  if (!rows.length) return
+  const cols = Object.keys(rows[0])
+  const csv  = [cols.join(','), ...rows.map(r => cols.map(c => r[c] ?? '').join(','))].join('\n')
+  const a    = document.createElement('a')
+  a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+function CsvButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick} title="Download CSV" style={{
+      display: 'flex', alignItems: 'center', gap: '0.3rem',
+      padding: '0.25rem 0.65rem', borderRadius: 6,
+      border: '1px solid var(--sq-border)', background: 'var(--sq-surface-2)',
+      color: 'var(--sq-muted)', cursor: 'pointer',
+      fontFamily: 'var(--font-data)', fontSize: '0.65rem', fontWeight: 500,
+      transition: 'border-color 0.15s, color 0.15s',
+    }}
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--sq-teal)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--sq-teal)' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--sq-border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--sq-muted)' }}
+    >
+      ↓ CSV
+    </button>
+  )
+}
+
 function tickFmt(val: string) {
   if (!val) return ''
   const [date, time] = val.split(' ')
@@ -65,7 +95,7 @@ function SqTooltip({ active, payload, label }: any) {
       borderRadius: 8, padding: '0.65rem 0.9rem',
       boxShadow: '0 4px 16px rgba(13,27,42,0.12)',
       fontFamily: 'var(--font-data)', fontSize: '0.75rem',
-      minWidth: 200, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+      minWidth: 200,
     }}>
       <div style={{ color: 'var(--sq-muted)', marginBottom: '0.4rem', fontSize: '0.65rem', letterSpacing: '0.04em' }}>{label}</div>
       {payload.filter((p: any) => p.value != null).map((p: any) => (
@@ -204,9 +234,12 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
       </div>
 
       <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
-        <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem', marginBottom:'1rem' }}>
-          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Generation by Facility</h3>
-          <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.65rem' }}>avg MW per interval</span>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1rem' }}>
+          <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
+            <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Generation by Facility</h3>
+            <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.65rem' }}>avg MW per interval</span>
+          </div>
+          <CsvButton onClick={() => downloadCsv(visibleRows.map((r: any) => ({ datetime: r.datetime, price: r.price, ...Object.fromEntries(facilities.map((f: string) => [f, r[f]])) })), `generation-${region}-${interval}.csv`)} />
         </div>
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={chartRows} margin={{ top:5, right:20, left:0, bottom:5 }}>
