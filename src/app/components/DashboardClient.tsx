@@ -239,7 +239,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
             <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--sq-text)', margin:0 }}>Gas Generation by Facility</h3>
             <span style={{ color:'var(--sq-muted)', fontFamily:'var(--font-data)', fontSize:'0.65rem' }}>avg MW per interval</span>
           </div>
-          <CsvButton onClick={() => downloadCsv(visibleRows.map((r: any) => ({ datetime: r.datetime, price: r.price, ...Object.fromEntries(facilities.map((f: string) => [f, r[f]])) })), `generation-${region}-${interval}.csv`)} />
+          <CsvButton onClick={() => downloadCsv(visibleRows.map((r: any) => ({ datetime: r.datetime, price: r.price, ...Object.fromEntries(facilities.map((f: string) => [f, r[f]])) })), `generation-${region}.csv`)} />
         </div>
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={chartRows} margin={{ top:5, right:20, left:0, bottom:5 }}>
