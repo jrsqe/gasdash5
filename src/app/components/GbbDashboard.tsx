@@ -519,7 +519,7 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
 // ── Pipeline Panel ────────────────────────────────────────────────────────────
 function PipelinePanel({ dates, pipelineFlows }: {
   dates:string[];
-  pipelineFlows: Record<string,{ flow:(number|null)[]; direction:string }>
+  pipelineFlows: Record<string,{ flow:(number|null)[]; direction:string; nameplateCapacity:number|null; stcCapacity:number|null }>
 }) {
   const pipelines = Object.keys(pipelineFlows).sort()
   const groups = [
