@@ -152,9 +152,9 @@ const PIPELINE_RULES: PipelineRule[] = [
   { shortName: 'SWQP',    facilityName: 'SWQP',                         locationName: 'Wallumbilla', directionFn: v => v >= 0 ? 'West' : 'East' },
   { shortName: 'QGP',     facilityName: 'QGP',                          locationName: '',            useTotalDemand: true, directionFn: () => 'North' },
   { shortName: 'RBP',     facilityName: 'RBP',                          locationName: 'Brisbane',    useTotalDemand: true, directionFn: () => 'East' },
-  { shortName: 'VTS-LMP', facilityName: 'Victorian Transmission System', locationName: 'Longford',   directionFn: () => 'West' },
-  { shortName: 'VTS-SWP', facilityName: 'Victorian Transmission System', locationName: 'Iona',       directionFn: v => v >= 0 ? 'East' : 'West' },
-  { shortName: 'VTS-VNI', facilityName: 'Victorian Transmission System', locationName: 'Culcairn',   directionFn: v => v >= 0 ? 'South' : 'North' },
+  { shortName: 'VTS-LMP', facilityName: 'VTS', locationName: 'Longford Hub', directionFn: () => 'West' },
+  { shortName: 'VTS-SWP', facilityName: 'VTS', locationName: 'Iona Hub',     directionFn: v => v >= 0 ? 'East' : 'West' },
+  { shortName: 'VTS-VNI', facilityName: 'VTS', locationName: 'Culcairn',     directionFn: v => v >= 0 ? 'South' : 'North' },
   { shortName: 'TGP',     facilityName: 'TGP',                          locationName: 'Longford',    directionFn: () => 'South' },
   { shortName: 'PCA',     facilityName: 'PCA',                          locationName: 'Iona',        directionFn: () => 'West' },
 ]
@@ -164,7 +164,7 @@ function calcPipelineFlow(rows: GbbRow[], rule: PipelineRule): number {
   const locUpper  = rule.locationName.toUpperCase()
 
   const matching = rows.filter(r => {
-    const nameMatch = r.FacilityName.toUpperCase().includes(nameUpper)
+    const nameMatch = r.FacilityName.toUpperCase() === nameUpper
     const locMatch  = !locUpper || r.LocationName.toUpperCase().includes(locUpper)
     return nameMatch && locMatch
   })
