@@ -1,463 +1,272 @@
 // ─── GBB data fetcher ────────────────────────────────────────────────────────
-// Fetches GasBBActualFlowStorage.zip from AEMO NEMWeb (public, no auth),
-// unzips server-side using Node's built-in zlib, parses the CSV inside.
+// Source: https://nemweb.com.au/Reports/Current/GBB/GasBBActualFlowStorage.zip
+// Plain CSV (no AEMO I/D/C prefixes), header on row 0:
+//   GasDate,FacilityName,FacilityId,FacilityType,Demand,Supply,TransferIn,
+//   TransferOut,HeldInStorage,CushionGasStorage,State,LocationName,LocationId,LastUpdated
 //
-// Pipeline flow business rules per:
-// bb-pipeline-flow-and-capacity-business-rules.pdf (AEMO 2019)
+// Pipeline flow business rules: bb-pipeline-flow-and-capacity-business-rules.pdf
 
 const GBB_ZIP_URL =
   'https://nemweb.com.au/Reports/Current/GBB/GasBBActualFlowStorage.zip'
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
+// ── Types ─────────────────────────────────────────────────────────────────────
 export interface GbbRow {
-  GasDate:          string   // "YYYY-MM-DD"
-  FacilityId:       string
-  FacilityName:     string
-  FacilityType:     string   // BBGPG | PROD | STOR | PIPE | COMPRESSOR | ...
-  State:            string   // NSW | VIC | SA | QLD | TAS
-  LocationId:       string
-  LocationName:     string
-  Demand:           number | null
-  Supply:           number | null
-  TransferIn:       number | null
-  TransferOut:      number | null
-  HeldInStorage:    number | null
-  CushionGasStorage:number | null
+  GasDate:           string
+  FacilityName:      string
+  FacilityId:        string
+  FacilityType:      string   // BBGPG | PROD | STOR | PIPE | COMPRESSOR | BBLARGE | LNGEXPORT
+  Demand:            number | null
+  Supply:            number | null
+  TransferIn:        number | null
+  TransferOut:       number | null
+  HeldInStorage:     number | null
+  CushionGasStorage: number | null
+  State:             string
+  LocationName:      string
+  LocationId:        string
 }
 
-export interface GpgDailyRow {
-  GasDate:      string
-  State:        string
-  FacilityName: string
-  Demand:       number   // TJ/day GPG demand
+export interface GbbTimeseries {
+  dates:             string[]
+  gpgByState:        Record<string, Record<string, number[]>>
+  prodByState:       Record<string, Record<string, number[]>>
+  storageByFacility: Record<string, {
+    state:         string
+    heldInStorage: (number | null)[]
+    supply:        (number | null)[]
+    demand:        (number | null)[]
+  }>
+  pipelineFlows:     Record<string, { flow: number[]; direction: string }>
 }
 
-export interface ProductionRow {
-  GasDate:      string
-  State:        string
-  FacilityName: string
-  Supply:       number   // TJ/day
-}
-
-export interface StorageRow {
-  GasDate:        string
-  State:          string
-  FacilityName:   string
-  HeldInStorage:  number | null   // TJ
-  CushionGas:     number | null   // TJ
-  Supply:         number | null   // withdrawals (TJ)
-  Demand:         number | null   // injections (TJ)
-}
-
-export interface PipelineFlowRow {
-  GasDate:   string
-  Pipeline:  string   // short name e.g. "EGP"
-  Flow:      number   // TJ/day, always positive per business rules
-  Direction: string   // e.g. "North", "South → North"
-}
-
-// ── CSV parser ───────────────────────────────────────────────────────────────
-
-function parseNum(s: string | undefined): number | null {
-  if (!s || s.trim() === '' || s.trim() === 'NULL') return null
-  const n = parseFloat(s.trim())
-  return isNaN(n) ? null : n
-}
-
-function fmtDate(raw: string): string {
-  // Input is typically "2024/03/01" or "2024-03-01 00:00:00" or ISO
-  return raw.trim().slice(0, 10).replace(/\//g, '-')
-}
-
-async function fetchGbbCsv(): Promise<GbbRow[]> {
-  // Fetch zip as binary
+// ── Fetch + unzip ─────────────────────────────────────────────────────────────
+async function fetchCsvText(): Promise<string> {
   const res = await fetch(GBB_ZIP_URL, { cache: 'no-store' })
   if (!res.ok) throw new Error(`GBB ZIP fetch failed: ${res.status}`)
-  const arrayBuf = await res.arrayBuffer()
-  const zipBuf   = Buffer.from(arrayBuf)
 
-  // Parse zip manually: extract first file entry: find the first local file entry and decompress it
-  // ZIP local file header magic: 0x04034b50
-  let csvText = ''
-  let offset = 0
-  while (offset < zipBuf.length - 4) {
-    const sig = zipBuf.readUInt32LE(offset)
-    if (sig !== 0x04034b50) { offset++; continue }
-    // Local file header layout:
-    // 4 sig, 2 version, 2 flags, 2 compression, 2 mod time, 2 mod date
-    // 4 crc, 4 compressed size, 4 uncompressed size, 2 fname len, 2 extra len
+  const zipBuf = Buffer.from(await res.arrayBuffer())
+
+  // Scan for ZIP local file header (0x04034b50)
+  for (let offset = 0; offset < zipBuf.length - 30; offset++) {
+    if (zipBuf.readUInt32LE(offset) !== 0x04034b50) continue
+
     const compression    = zipBuf.readUInt16LE(offset + 8)
     const compressedSize = zipBuf.readUInt32LE(offset + 18)
     const fnameLen       = zipBuf.readUInt16LE(offset + 26)
     const extraLen       = zipBuf.readUInt16LE(offset + 28)
-    const dataOffset     = offset + 30 + fnameLen + extraLen
-    const compressedData = zipBuf.slice(dataOffset, dataOffset + compressedSize)
+    const dataStart      = offset + 30 + fnameLen + extraLen
+    const compData       = zipBuf.slice(dataStart, dataStart + compressedSize)
 
-    if (compression === 0) {
-      // Stored (no compression)
-      csvText = compressedData.toString('latin1')
-    } else if (compression === 8) {
-      // Deflated
+    if (compression === 0) return compData.toString('latin1')
+    if (compression === 8) {
       const { inflateRawSync } = await import('zlib')
-      csvText = inflateRawSync(compressedData).toString('latin1')
+      return inflateRawSync(compData).toString('latin1')
     }
-    break
+    throw new Error(`Unsupported ZIP compression method: ${compression}`)
   }
+  throw new Error('No ZIP local file header found')
+}
 
-  if (!csvText) throw new Error('Could not extract CSV from GBB zip')
-  const text = csvText
+// ── CSV parser ────────────────────────────────────────────────────────────────
+function parseNum(s: string): number | null {
+  const t = s.trim()
+  if (!t || t === 'NULL') return null
+  const n = parseFloat(t)
+  return isNaN(n) ? null : n
+}
 
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+function parseDate(s: string): string {
+  // "2024/03/01" → "2024-03-01"
+  return s.trim().slice(0, 10).replace(/\//g, '-')
+}
 
-  // AEMO CSV format: first line is a header like
-  // "I,GBB_ACTUAL_FLOW_STORAGE,...\nD,...fields..."
-  // Find the "D" (data) header row to get column names, then parse data rows
-  let headerIdx = -1
-  const cols: string[] = []
+function parseCsv(text: string): GbbRow[] {
+  const lines = text.split('\n')
+  if (lines.length < 2) return []
 
-  for (let i = 0; i < lines.length; i++) {
-    const parts = lines[i].split(',')
-    if (parts[0] === 'I') {
-      // Next non-comment line starting with D is the column header
-      headerIdx = i
-    }
-    if (parts[0] === 'D' && headerIdx >= 0 && cols.length === 0) {
-      // This is the column name row
-      cols.push(...parts.slice(1).map(c => c.trim()))
-      headerIdx = i
-      continue
-    }
-  }
+  // Row 0 is the plain header — no I/D/C prefixes
+  const cols = lines[0].split(',').map(c => c.trim())
+  const idx  = (name: string) => cols.indexOf(name)
 
-  // If we couldn't find AEMO-style header, assume first line is CSV header
-  if (cols.length === 0) {
-    const firstLine = lines[0].replace(/^[A-Z],/, '')
-    cols.push(...firstLine.split(',').map(c => c.trim()))
-  }
-
-  const idx = (name: string) => cols.indexOf(name)
+  const iDate    = idx('GasDate')
+  const iName    = idx('FacilityName')
+  const iId      = idx('FacilityId')
+  const iType    = idx('FacilityType')
+  const iDemand  = idx('Demand')
+  const iSupply  = idx('Supply')
+  const iTxIn    = idx('TransferIn')
+  const iTxOut   = idx('TransferOut')
+  const iStorage = idx('HeldInStorage')
+  const iCushion = idx('CushionGasStorage')
+  const iState   = idx('State')
+  const iLocName = idx('LocationName')
+  const iLocId   = idx('LocationId')
 
   const rows: GbbRow[] = []
-  let inData = false
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+    const p = line.split(',')
+    if (p.length < 11) continue
 
-  for (const line of lines) {
-    const parts = line.split(',')
-    // AEMO data lines start with "D"
-    if (parts[0] === 'I') { inData = false; continue }
-    if (parts[0] === 'D' && !inData) { inData = true; continue } // header row
-    if (!inData && parts[0] !== 'D') continue
-    if (parts[0] === 'C') continue // comment/footer rows
-
-    const data = parts.slice(1)
-
-    const get = (name: string) => data[idx(name)]?.trim() ?? ''
-
-    const gasDate = fmtDate(get('GasDate') || get('GASDATE') || get('Gas_Date') || data[0])
-    if (!gasDate || gasDate.length < 10) continue
+    const gasDate = parseDate(p[iDate] ?? '')
+    if (gasDate.length < 10) continue
 
     rows.push({
       GasDate:           gasDate,
-      FacilityId:        get('FacilityId') || get('FACILITYID'),
-      FacilityName:      get('FacilityName') || get('FACILITYNAME'),
-      FacilityType:      get('FacilityType') || get('FACILITYTYPE'),
-      State:             get('State') || get('STATE'),
-      LocationId:        get('LocationId') || get('LOCATIONID'),
-      LocationName:      get('LocationName') || get('LOCATIONNAME'),
-      Demand:            parseNum(get('Demand') || get('DEMAND')),
-      Supply:            parseNum(get('Supply') || get('SUPPLY')),
-      TransferIn:        parseNum(get('TransferIn') || get('TRANSFERIN')),
-      TransferOut:       parseNum(get('TransferOut') || get('TRANSFEROUT')),
-      HeldInStorage:     parseNum(get('HeldInStorage') || get('HELDINSTORAGE')),
-      CushionGasStorage: parseNum(get('CushionGasStorage') || get('CUSHIONGASSTORAGE')),
+      FacilityName:      (p[iName]  ?? '').trim(),
+      FacilityId:        (p[iId]    ?? '').trim(),
+      FacilityType:      (p[iType]  ?? '').trim(),
+      Demand:            parseNum(p[iDemand]  ?? ''),
+      Supply:            parseNum(p[iSupply]  ?? ''),
+      TransferIn:        parseNum(p[iTxIn]    ?? ''),
+      TransferOut:       parseNum(p[iTxOut]   ?? ''),
+      HeldInStorage:     parseNum(p[iStorage] ?? ''),
+      CushionGasStorage: parseNum(p[iCushion] ?? ''),
+      State:             (p[iState]   ?? '').trim(),
+      LocationName:      (p[iLocName] ?? '').trim(),
+      LocationId:        (p[iLocId]   ?? '').trim(),
     })
   }
-
   return rows
 }
 
-// ── GPG demand: filter BBGPG, states NSW+VIC ─────────────────────────────────
-
-function extractGpgDemand(rows: GbbRow[]): GpgDailyRow[] {
-  return rows
-    .filter(r => r.FacilityType === 'BBGPG' && ['NSW', 'VIC'].includes(r.State))
-    .map(r => ({
-      GasDate:      r.GasDate,
-      State:        r.State,
-      FacilityName: r.FacilityName,
-      Demand:       r.Demand ?? 0,
-    }))
-}
-
-// ── Production: PROD facilities, states NSW+VIC+SA+QLD ───────────────────────
-
-function extractProduction(rows: GbbRow[]): ProductionRow[] {
-  return rows
-    .filter(r => r.FacilityType === 'PROD' && ['NSW', 'VIC', 'SA', 'QLD'].includes(r.State))
-    .map(r => ({
-      GasDate:      r.GasDate,
-      State:        r.State,
-      FacilityName: r.FacilityName,
-      Supply:       r.Supply ?? 0,
-    }))
-}
-
-// ── Storage: STOR facilities, states NSW+VIC+SA ───────────────────────────────
-
-function extractStorage(rows: GbbRow[]): StorageRow[] {
-  return rows
-    .filter(r => r.FacilityType === 'STOR' && ['NSW', 'VIC', 'SA'].includes(r.State))
-    .map(r => ({
-      GasDate:       r.GasDate,
-      State:         r.State,
-      FacilityName:  r.FacilityName,
-      HeldInStorage: r.HeldInStorage,
-      CushionGas:    r.CushionGasStorage,
-      Supply:        r.Supply,    // withdrawals
-      Demand:        r.Demand,    // injections
-    }))
-}
-
-// ── Pipeline flows per business rules ────────────────────────────────────────
-// Rules: for each pipeline look at specific location + calculation
-// then derive a flow value (positive) and direction label.
+// ── Pipeline flow calculations (per AEMO business rules PDF) ──────────────────
+// For each pipeline: (Supply + TransferIn) - (Demand + TransferOut) at the
+// specified location. Returns signed value; direction label derived from sign.
 
 interface PipelineRule {
-  shortName: string
-  locationName: string   // match against LocationName in CSV
-  facilityName: string   // match against FacilityName
-  calcFn: (rows: GbbRow[]) => number  // returns signed value; we show abs + derive direction
-  directionFn: (val: number) => string
-}
-
-// Convenience: find rows at a location and sum a field
-function locSum(
-  rows: GbbRow[],
-  facilityName: string,
-  locationName: string,
-  field: keyof GbbRow
-): number {
-  return rows
-    .filter(r =>
-      r.FacilityName.toUpperCase().includes(facilityName.toUpperCase()) &&
-      r.LocationName.toUpperCase().includes(locationName.toUpperCase())
-    )
-    .reduce((s, r) => s + ((r[field] as number | null) ?? 0), 0)
-}
-
-function calcFlow(rows: GbbRow[], facilityName: string, locationName: string): number {
-  const r = rows.find(r =>
-    r.FacilityName.toUpperCase().includes(facilityName.toUpperCase()) &&
-    r.LocationName.toUpperCase().includes(locationName.toUpperCase())
-  )
-  if (!r) return 0
-  return ((r.Supply ?? 0) + (r.TransferIn ?? 0)) - ((r.Demand ?? 0) + (r.TransferOut ?? 0))
+  shortName:    string
+  facilityName: string   // substring match on FacilityName
+  locationName: string   // substring match on LocationName
+  // For QGP and RBP the calc is different (total demand, not net flow)
+  useTotalDemand?: boolean
+  directionFn: (signed: number) => string
 }
 
 const PIPELINE_RULES: PipelineRule[] = [
-  {
-    shortName: 'EGP',
-    facilityName: 'Eastern Gas Pipeline',
-    locationName: 'Longford',
-    calcFn: (rows) => calcFlow(rows, 'Eastern Gas Pipeline', 'Longford'),
-    directionFn: () => 'North',
-  },
-  {
-    shortName: 'MSP',
-    facilityName: 'Moomba to Sydney Pipeline',
-    locationName: 'Moomba',
-    calcFn: (rows) => calcFlow(rows, 'Moomba to Sydney Pipeline', 'Moomba'),
-    directionFn: (v) => v >= 0 ? 'South' : 'North',
-  },
-  {
-    shortName: 'MAPS',
-    facilityName: 'Moomba to Adelaide Pipeline',
-    locationName: 'Moomba',
-    calcFn: (rows) => calcFlow(rows, 'Moomba to Adelaide Pipeline', 'Moomba'),
-    directionFn: () => 'South',
-  },
-  {
-    shortName: 'CGP',
-    facilityName: 'Carpentaria Gas Pipeline',
-    locationName: 'Ballera',
-    calcFn: (rows) => calcFlow(rows, 'Carpentaria', 'Ballera'),
-    directionFn: (v) => v >= 0 ? 'North' : 'South',
-  },
-  {
-    shortName: 'SWQP',
-    facilityName: 'South West Queensland Pipeline',
-    locationName: 'Wallumbilla',
-    calcFn: (rows) => calcFlow(rows, 'South West Queensland Pipeline', 'Wallumbilla'),
-    directionFn: (v) => v >= 0 ? 'West' : 'East',
-  },
-  {
-    shortName: 'QGP',
-    facilityName: 'Queensland Gas Pipeline',
-    locationName: 'Wallumbilla',
-    calcFn: (rows) => {
-      // Total demand on QGP
-      return rows
-        .filter(r => r.FacilityName.toUpperCase().includes('QUEENSLAND GAS PIPELINE'))
-        .reduce((s, r) => s + (r.Demand ?? 0), 0)
-    },
-    directionFn: () => 'North',
-  },
-  {
-    shortName: 'RBP',
-    facilityName: 'Roma Brisbane Pipeline',
-    locationName: 'Brisbane',
-    calcFn: (rows) => {
-      const r = rows.find(r =>
-        r.FacilityName.toUpperCase().includes('ROMA') &&
-        r.FacilityName.toUpperCase().includes('BRISBANE') &&
-        r.LocationName.toUpperCase().includes('BRISBANE')
-      )
-      return r ? (r.Demand ?? 0) : 0
-    },
-    directionFn: () => 'East',
-  },
-  {
-    shortName: 'VTS-LMP',
-    facilityName: 'Victorian Transmission System',
-    locationName: 'Longford',
-    calcFn: (rows) => calcFlow(rows, 'Victorian Transmission System', 'Longford'),
-    directionFn: () => 'West',
-  },
-  {
-    shortName: 'VTS-SWP',
-    facilityName: 'Victorian Transmission System',
-    locationName: 'Iona',
-    calcFn: (rows) => calcFlow(rows, 'Victorian Transmission System', 'Iona'),
-    directionFn: (v) => v >= 0 ? 'East' : 'West',
-  },
-  {
-    shortName: 'VTS-VNI',
-    facilityName: 'Victorian Transmission System',
-    locationName: 'Culcairn',
-    calcFn: (rows) => calcFlow(rows, 'Victorian Transmission System', 'Culcairn'),
-    directionFn: (v) => v >= 0 ? 'South' : 'North',
-  },
-  {
-    shortName: 'TGP',
-    facilityName: 'Tasmania Gas Pipeline',
-    locationName: 'Longford',
-    calcFn: (rows) => calcFlow(rows, 'Tasmania Gas Pipeline', 'Longford'),
-    directionFn: () => 'South',
-  },
-  {
-    shortName: 'PCA',
-    facilityName: 'Port Campbell to Adelaide',
-    locationName: 'Iona',
-    calcFn: (rows) => calcFlow(rows, 'Port Campbell', 'Iona'),
-    directionFn: () => 'West',
-  },
+  { shortName: 'EGP',     facilityName: 'EGP',                          locationName: 'Longford',    directionFn: () => 'North' },
+  { shortName: 'MSP',     facilityName: 'MSP',                          locationName: 'Moomba',      directionFn: v => v >= 0 ? 'South' : 'North' },
+  { shortName: 'MAPS',    facilityName: 'MAPS',                         locationName: 'Moomba',      directionFn: () => 'South' },
+  { shortName: 'CGP',     facilityName: 'CGP',                          locationName: 'Ballera',     directionFn: v => v >= 0 ? 'North' : 'South' },
+  { shortName: 'SWQP',    facilityName: 'SWQP',                         locationName: 'Wallumbilla', directionFn: v => v >= 0 ? 'West' : 'East' },
+  { shortName: 'QGP',     facilityName: 'QGP',                          locationName: '',            useTotalDemand: true, directionFn: () => 'North' },
+  { shortName: 'RBP',     facilityName: 'RBP',                          locationName: 'Brisbane',    useTotalDemand: true, directionFn: () => 'East' },
+  { shortName: 'VTS-LMP', facilityName: 'Victorian Transmission System', locationName: 'Longford',   directionFn: () => 'West' },
+  { shortName: 'VTS-SWP', facilityName: 'Victorian Transmission System', locationName: 'Iona',       directionFn: v => v >= 0 ? 'East' : 'West' },
+  { shortName: 'VTS-VNI', facilityName: 'Victorian Transmission System', locationName: 'Culcairn',   directionFn: v => v >= 0 ? 'South' : 'North' },
+  { shortName: 'TGP',     facilityName: 'TGP',                          locationName: 'Longford',    directionFn: () => 'South' },
+  { shortName: 'PCA',     facilityName: 'PCA',                          locationName: 'Iona',        directionFn: () => 'West' },
 ]
 
-function extractPipelineFlows(allRows: GbbRow[]): PipelineFlowRow[] {
-  // Group rows by GasDate first
-  const byDate = new Map<string, GbbRow[]>()
-  for (const r of allRows) {
-    const existing = byDate.get(r.GasDate) ?? []
-    existing.push(r)
-    byDate.set(r.GasDate, existing)
+function calcPipelineFlow(rows: GbbRow[], rule: PipelineRule): number {
+  const nameUpper = rule.facilityName.toUpperCase()
+  const locUpper  = rule.locationName.toUpperCase()
+
+  const matching = rows.filter(r => {
+    const nameMatch = r.FacilityName.toUpperCase().includes(nameUpper)
+    const locMatch  = !locUpper || r.LocationName.toUpperCase().includes(locUpper)
+    return nameMatch && locMatch
+  })
+
+  if (matching.length === 0) return 0
+
+  if (rule.useTotalDemand) {
+    return matching.reduce((s, r) => s + (r.Demand ?? 0), 0)
   }
 
-  const result: PipelineFlowRow[] = []
-  for (const [date, rows] of byDate.entries()) {
-    for (const rule of PIPELINE_RULES) {
-      const signed = rule.calcFn(rows)
-      if (signed === 0 && !rows.some(r => r.FacilityName.toUpperCase().includes(rule.facilityName.toUpperCase()))) continue
-      result.push({
-        GasDate:   date,
-        Pipeline:  rule.shortName,
-        Flow:      Math.abs(signed),
-        Direction: rule.directionFn(signed),
-      })
-    }
-  }
-  return result.sort((a, b) => a.GasDate.localeCompare(b.GasDate))
+  return matching.reduce((s, r) =>
+    s + (r.Supply ?? 0) + (r.TransferIn ?? 0) - (r.Demand ?? 0) - (r.TransferOut ?? 0), 0
+  )
 }
 
-// ── Aggregate into timeseries by date ────────────────────────────────────────
-
-export interface GbbTimeseries {
-  dates:        string[]
-  // GPG demand: { NSW: { [facilityName]: number[] }, VIC: {...} }
-  gpgByState:   Record<string, Record<string, number[]>>
-  // Production: { NSW/VIC/SA/QLD: { [facilityName]: number[] } }
-  prodByState:  Record<string, Record<string, number[]>>
-  // Storage: { [facilityName]: { heldInStorage, supply, demand }[] }
-  storageByFacility: Record<string, { state: string; heldInStorage: (number|null)[]; supply: (number|null)[]; demand: (number|null)[] }>
-  // Pipeline: { [shortName]: { flow: number[], direction: string } }
-  pipelineFlows: Record<string, { flow: number[]; direction: string }>
-}
-
+// ── Build timeseries ──────────────────────────────────────────────────────────
 export async function getGbbData(): Promise<GbbTimeseries> {
-  const allRows = await fetchGbbCsv()
+  const csvText = await fetchCsvText()
+  const allRows = parseCsv(csvText)
 
-  const gpgRows   = extractGpgDemand(allRows)
-  const prodRows  = extractProduction(allRows)
-  const storRows  = extractStorage(allRows)
-  const pipeRows  = extractPipelineFlows(allRows)
+  if (allRows.length === 0) throw new Error('GBB CSV parsed 0 rows')
 
-  // Collect all dates
+  // Only keep the last 31 days to match the dashboard window
   const allDates = Array.from(new Set(allRows.map(r => r.GasDate))).sort()
+  const recentDates = allDates.slice(-31)
+  const rows = allRows.filter(r => recentDates.includes(r.GasDate))
 
-  // GPG by state → facility
-  const gpgByState: Record<string, Record<string, number[]>> = {}
-  for (const d of allDates) {
-    for (const row of gpgRows.filter(r => r.GasDate === d)) {
-      if (!gpgByState[row.State]) gpgByState[row.State] = {}
-      if (!gpgByState[row.State][row.FacilityName]) {
-        gpgByState[row.State][row.FacilityName] = new Array(allDates.length).fill(null)
-      }
-      gpgByState[row.State][row.FacilityName][allDates.indexOf(d)] = row.Demand
-    }
+  // Helper: get or create array
+  const ensureArr = (obj: Record<string, any>, key: string, len: number) => {
+    if (!obj[key]) obj[key] = new Array(len).fill(null)
+    return obj[key] as (number | null)[]
   }
 
-  // Production by state → facility
-  const prodByState: Record<string, Record<string, number[]>> = {}
-  for (const d of allDates) {
-    for (const row of prodRows.filter(r => r.GasDate === d)) {
-      if (!prodByState[row.State]) prodByState[row.State] = {}
-      if (!prodByState[row.State][row.FacilityName]) {
-        prodByState[row.State][row.FacilityName] = new Array(allDates.length).fill(null)
-      }
-      prodByState[row.State][row.FacilityName][allDates.indexOf(d)] = row.Supply
-    }
+  // ── GPG demand: BBGPG, NSW + VIC ──
+  const gpgByState: GbbTimeseries['gpgByState'] = {}
+  for (const row of rows.filter(r => r.FacilityType === 'BBGPG' && ['NSW', 'VIC'].includes(r.State))) {
+    if (!gpgByState[row.State]) gpgByState[row.State] = {}
+    const arr = ensureArr(gpgByState[row.State], row.FacilityName, recentDates.length)
+    const i   = recentDates.indexOf(row.GasDate)
+    if (i >= 0) arr[i] = (arr[i] ?? 0) + (row.Demand ?? 0)
   }
 
-  // Storage by facility
+  // ── Production: PROD, NSW + VIC + SA + QLD ──
+  const prodByState: GbbTimeseries['prodByState'] = {}
+  for (const row of rows.filter(r => r.FacilityType === 'PROD' && ['NSW', 'VIC', 'SA', 'QLD'].includes(r.State))) {
+    if (!prodByState[row.State]) prodByState[row.State] = {}
+    const arr = ensureArr(prodByState[row.State], row.FacilityName, recentDates.length)
+    const i   = recentDates.indexOf(row.GasDate)
+    if (i >= 0) arr[i] = (arr[i] ?? 0) + (row.Supply ?? 0)
+  }
+
+  // ── Storage: STOR, NSW + VIC + SA ──
   const storageByFacility: GbbTimeseries['storageByFacility'] = {}
-  for (const d of allDates) {
-    for (const row of storRows.filter(r => r.GasDate === d)) {
-      if (!storageByFacility[row.FacilityName]) {
-        storageByFacility[row.FacilityName] = {
-          state:         row.State,
-          heldInStorage: new Array(allDates.length).fill(null),
-          supply:        new Array(allDates.length).fill(null),
-          demand:        new Array(allDates.length).fill(null),
+  for (const row of rows.filter(r => r.FacilityType === 'STOR' && ['NSW', 'VIC', 'SA'].includes(r.State))) {
+    if (!storageByFacility[row.FacilityName]) {
+      storageByFacility[row.FacilityName] = {
+        state:         row.State,
+        heldInStorage: new Array(recentDates.length).fill(null),
+        supply:        new Array(recentDates.length).fill(null),
+        demand:        new Array(recentDates.length).fill(null),
+      }
+    }
+    const i = recentDates.indexOf(row.GasDate)
+    if (i < 0) continue
+    const f = storageByFacility[row.FacilityName]
+    if (row.HeldInStorage != null) f.heldInStorage[i] = row.HeldInStorage
+    // A facility may have multiple location rows — accumulate supply/demand
+    f.supply[i] = (f.supply[i] ?? 0) + (row.Supply ?? 0)
+    f.demand[i] = (f.demand[i] ?? 0) + (row.Demand ?? 0)
+  }
+
+  // ── Pipeline flows: group rows by date then apply rules ──
+  const byDate = new Map<string, GbbRow[]>()
+  for (const row of rows.filter(r => r.FacilityType === 'PIPE')) {
+    const arr = byDate.get(row.GasDate) ?? []
+    arr.push(row)
+    byDate.set(row.GasDate, arr)
+  }
+
+  const pipelineFlows: GbbTimeseries['pipelineFlows'] = {}
+  for (const [date, dateRows] of Array.from(byDate.entries())) {
+    const i = recentDates.indexOf(date)
+    if (i < 0) continue
+    for (const rule of PIPELINE_RULES) {
+      const signed = calcPipelineFlow(dateRows, rule)
+      if (!pipelineFlows[rule.shortName]) {
+        pipelineFlows[rule.shortName] = {
+          flow:      new Array(recentDates.length).fill(null),
+          direction: rule.directionFn(signed),
         }
       }
-      const i = allDates.indexOf(d)
-      storageByFacility[row.FacilityName].heldInStorage[i] = row.HeldInStorage
-      storageByFacility[row.FacilityName].supply[i]        = row.Supply
-      storageByFacility[row.FacilityName].demand[i]        = row.Demand
+      pipelineFlows[rule.shortName].flow[i] = Math.abs(signed)
+      // Update direction label based on latest sign
+      pipelineFlows[rule.shortName].direction = rule.directionFn(signed)
     }
   }
 
-  // Pipeline flows
-  const pipelineFlows: GbbTimeseries['pipelineFlows'] = {}
-  for (const row of pipeRows) {
-    if (!pipelineFlows[row.Pipeline]) {
-      pipelineFlows[row.Pipeline] = {
-        flow:      new Array(allDates.length).fill(null),
-        direction: row.Direction,
-      }
-    }
-    const i = allDates.indexOf(row.GasDate)
-    if (i >= 0) pipelineFlows[row.Pipeline].flow[i] = row.Flow
+  return {
+    dates:             recentDates,
+    gpgByState,
+    prodByState,
+    storageByFacility,
+    pipelineFlows,
   }
-
-  return { dates: allDates, gpgByState, prodByState, storageByFacility, pipelineFlows }
 }
