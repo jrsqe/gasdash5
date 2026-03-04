@@ -256,7 +256,7 @@ export default function GpgProfileDashboard() {
   const [region, setRegion] = useState<'NSW' | 'VIC'>('NSW')
 
   // Fetch on mount
-  useEffect(() => { fetchData(false) }, [])
+  useEffect(() => { fetchData('1h') }, [])
 
   const lastFetched = fetchedAt
     ? new Date(fetchedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
@@ -290,7 +290,7 @@ export default function GpgProfileDashboard() {
               Updated {lastFetched}
             </span>
           )}
-          <button onClick={() => fetchData(true)} disabled={loading} style={{
+          <button onClick={() => fetchData('1h', true)} disabled={loading} style={{
             padding: '0.3rem 0.75rem', border: '1px solid var(--border)',
             borderRadius: 'var(--radius-sm)', background: 'transparent',
             cursor: loading ? 'not-allowed' : 'pointer',
