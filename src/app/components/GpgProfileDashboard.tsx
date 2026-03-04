@@ -256,7 +256,7 @@ export default function GpgProfileDashboard() {
   const [region, setRegion] = useState<'NSW' | 'VIC'>('NSW')
 
   // Fetch on mount
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData(false) }, [])
 
   const lastFetched = fetchedAt
     ? new Date(fetchedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
