@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid,
+  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { useElecData } from './MainDashboard'
@@ -241,17 +241,17 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
           </div>
           <CsvButton onClick={() => downloadCsv(visibleRows.map((r: any) => ({ datetime: r.datetime, price: r.price, ...Object.fromEntries(facilities.map((f: string) => [f, r[f]])) })), `generation-${region}.csv`)} />
         </div>
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={chartRows} margin={{ top:5, right:20, left:0, bottom:5 }}>
+        <ResponsiveContainer width="100%" height={320}>
+          <ComposedChart data={chartRows} margin={{ top:5, right:20, left:0, bottom:5 }}>
             <defs>
               {facilities.map((name: string, i: number) => (
                 <linearGradient key={name} id={`elecGrad${i}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={FACILITY_COLOURS[i % FACILITY_COLOURS.length]} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={FACILITY_COLOURS[i % FACILITY_COLOURS.length]} stopOpacity={0} />
+                  <stop offset="0%"   stopColor={FACILITY_COLOURS[i % FACILITY_COLOURS.length]} stopOpacity={0.9} />
+                  <stop offset="100%" stopColor={FACILITY_COLOURS[i % FACILITY_COLOURS.length]} stopOpacity={0.7} />
                 </linearGradient>
               ))}
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--sq-border)" vertical={false} />
             <XAxis dataKey="datetime" tickFormatter={tickFmt}
               tick={{ fill:'var(--sq-muted)', fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={{ stroke:'var(--sq-border)' }} interval="preserveStartEnd" />
@@ -260,19 +260,19 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
               tickLine={false} axisLine={false} width={54} tickFormatter={v => `${v} MW`} />
             <YAxis yAxisId="price" orientation="right"
               tick={{ fill: PRICE_COLOUR, fontSize:9, fontFamily:'var(--font-data)' }}
-              tickLine={false} axisLine={false} width={58} tickFormatter={v => `$${v}`} />
+              tickLine={false} axisLine={false} width={62} tickFormatter={v => `$${v}`} />
             <Tooltip content={<SqTooltip />} />
             <Legend wrapperStyle={{ fontSize:'0.65rem', fontFamily:'var(--font-data)', paddingTop:'0.5rem', color:'var(--sq-text-2)' }} />
             {facilities.map((name: string, i: number) => (
               <Area key={name} yAxisId="gen" type="monotone" dataKey={name}
-                stroke={FACILITY_COLOURS[i % FACILITY_COLOURS.length]} strokeWidth={1.5}
+                stroke={FACILITY_COLOURS[i % FACILITY_COLOURS.length]} strokeWidth={0}
                 fill={`url(#elecGrad${i})`} stackId="gen"
                 dot={false} activeDot={{ r:3, strokeWidth:0 }} connectNulls />
             ))}
             <Line yAxisId="price" type="monotone" dataKey="price" name="Spot Price ($/MWh)"
-              stroke={PRICE_COLOUR} strokeWidth={1.5} strokeDasharray="4 3"
-              dot={false} activeDot={{ r:3, strokeWidth:0 }} connectNulls />
-          </AreaChart>
+              stroke={PRICE_COLOUR} strokeWidth={2} strokeDasharray="5 3"
+              dot={false} activeDot={{ r:4, strokeWidth:0, fill: PRICE_COLOUR }} connectNulls />
+          </ComposedChart>
         </ResponsiveContainer>
 
         {/* Range controls below chart */}
