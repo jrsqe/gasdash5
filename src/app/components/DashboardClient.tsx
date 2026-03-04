@@ -346,6 +346,17 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
   const activeData = payload?.data?.[activeTab]
   const lastFetched = fetchedAt ? new Date(fetchedAt).toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' }) : null
 
+  // Most recent datetime in the dataset (last row of whichever region has data)
+  const latestDataDate = useMemo(() => {
+    const rows = payload?.data?.NSW?.rows ?? payload?.data?.VIC?.rows ?? []
+    if (!rows.length) return null
+    const last = rows[rows.length - 1]?.datetime as string | undefined
+    if (!last) return null
+    const [datePart, timePart] = last.split(' ')
+    const [yyyy, mm, dd] = (datePart ?? '').split('-')
+    return `${dd}/${mm}/${yyyy} ${timePart ?? ''}`
+  }, [payload])
+
   return (
     <div style={{ background:'var(--bg)' }}>
       {/* Sub-header: region tabs + interval */}
@@ -380,6 +391,21 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
           <PillGroup label="Interval" options={INTERVAL_OPTIONS} value={interval} onChange={handleInterval} disabled={loading} />
         </div>
       </div>
+
+      {/* Latest data date banner */}
+      {latestDataDate && !loading && (
+        <div style={{
+          background:'var(--surface-2)', borderBottom:'1px solid var(--border)',
+          padding:'0.35rem 1.75rem', display:'flex', alignItems:'center', gap:'0.5rem',
+        }}>
+          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)', letterSpacing:'0.04em', textTransform:'uppercase' }}>
+            Most recent data:
+          </span>
+          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.68rem', fontWeight:600, color:'var(--accent)' }}>
+            {latestDataDate}
+          </span>
+        </div>
+      )}
 
       <div style={{ maxWidth:1400, margin:'0 auto', padding:'1.5rem' }}>
         {error ? (

@@ -698,6 +698,14 @@ export default function GbbDashboard() {
     ? new Date(fetchedAt).toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' })
     : null
 
+  // Format the most recent GBB date for display
+  const latestGbbDate = useMemo(() => {
+    if (!data?.dates?.length) return null
+    const d = data.dates[data.dates.length - 1] // format: YYYY-MM-DD
+    const [yyyy, mm, dd] = d.split('-')
+    return `${dd}/${mm}/${yyyy}`
+  }, [data])
+
   if (loading && !data) return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'4rem 0', gap:'1rem' }}>
       <div style={{ width:28, height:28, border:'2px solid var(--border)', borderTopColor:'var(--accent)', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />
@@ -714,13 +722,31 @@ export default function GbbDashboard() {
 
   return (
     <div>
-      {lastFetched && (
-        <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'0.75rem' }}>
-          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)' }}>
-            Updated {lastFetched}
+      {/* Date + fetch time banner */}
+      <div style={{
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        background:'var(--surface-2)', border:'1px solid var(--border)',
+        borderRadius:'var(--radius-sm)', padding:'0.4rem 0.85rem',
+        marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem',
+      }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)', letterSpacing:'0.04em', textTransform:'uppercase' }}>
+            Most recent data:
           </span>
+          {latestGbbDate ? (
+            <span style={{ fontFamily:'var(--font-data)', fontSize:'0.68rem', fontWeight:600, color:'var(--accent)' }}>
+              {latestGbbDate}
+            </span>
+          ) : (
+            <span style={{ fontFamily:'var(--font-data)', fontSize:'0.68rem', color:'var(--muted)' }}>—</span>
+          )}
         </div>
-      )}
+        {lastFetched && (
+          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)' }}>
+            Fetched {lastFetched}
+          </span>
+        )}
+      </div>
       <GpgPanel        dates={data.dates} gpgByState={data.gpgByState} largeByState={data.largeByState ?? {}} />
       <StoragePanel    dates={data.dates} storageByFacility={data.storageByFacility} />
       <ProductionPanel dates={data.dates} prodByState={data.prodByState} />

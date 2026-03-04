@@ -210,7 +210,7 @@ export async function getGbbData(): Promise<GbbTimeseries> {
 
   // ── Large industry demand: BBLARGE, NSW + VIC ──
   const largeByState: GbbTimeseries['largeByState'] = {}
-  for (const row of rows.filter(r => r.FacilityType === 'BBLARGE' && ['NSW', 'VIC', 'QLD', 'SA'].includes(r.State))) {
+  for (const row of rows.filter(r => r.FacilityType === 'BBLARGE' && ['NSW', 'VIC'].includes(r.State))) {
     if (!largeByState[row.State]) largeByState[row.State] = {}
     const arr = ensureArr(largeByState[row.State], row.FacilityName, recentDates.length)
     const i   = recentDates.indexOf(row.GasDate)
