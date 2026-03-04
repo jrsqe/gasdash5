@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic'
 const ElectricityDashboard = dynamic(() => import('./DashboardClient'), { ssr: false })
 const GbbDashboard         = dynamic(() => import('./GbbDashboard'),    { ssr: false })
 
-type TopTab = 'electricity' | 'gas'
+type TopTab = 'electricity' | 'gas' | 'gpg-profile'
 
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 
@@ -116,6 +116,7 @@ export default function MainDashboard() {
         {([
           { key: 'electricity', label: 'Gas Power Generation' },
           { key: 'gas',         label: 'Gas Market (GBB)' },
+          { key: 'gpg-profile', label: 'GPG Generation Profile' },
         ] as { key: TopTab; label: string }[]).map(({ key, label }) => {
           const isActive = tab === key
           return (
@@ -136,6 +137,9 @@ export default function MainDashboard() {
       <div style={{ display: tab === 'electricity' ? 'block' : 'none' }}>
         <ElectricityDashboard hideHeader />
       </div>
+      <div style={{ display: tab === 'gpg-profile' ? 'block' : 'none' }}>
+        <GpgProfileDashboard />
+      </div>
       <div style={{ display: tab === 'gas' ? 'block' : 'none' }}>
         <div style={{ maxWidth: 1400, margin: '0 auto', padding: '1.5rem' }}>
           <GbbDashboard />
@@ -150,7 +154,8 @@ export default function MainDashboard() {
       }}>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)' }}>
           {tab === 'electricity'
-            ? 'Open Electricity API · openelectricity.org.au'
+            === 'electricity' ? 'Open Electricity API · openelectricity.org.au'
+            : tab === 'gpg-profile' ? 'Open Electricity API · openelectricity.org.au'
             : 'AEMO Gas Bulletin Board · nemweb.com.au'}
         </span>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)', letterSpacing: '0.04em' }}>
