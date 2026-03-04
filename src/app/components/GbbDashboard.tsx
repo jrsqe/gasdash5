@@ -637,7 +637,6 @@ function PipelinePanel({ dates, pipelineFlows }: {
     </div>
   )
 }
-}
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function GbbDashboard() {
