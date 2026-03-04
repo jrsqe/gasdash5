@@ -154,10 +154,7 @@ export default function MainDashboard() {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)' }}>
-          {tab === 'electricity'
-            === 'electricity' ? 'Open Electricity API · openelectricity.org.au'
-            : tab === 'gpg-profile' ? 'Open Electricity API · openelectricity.org.au'
-            : 'AEMO Gas Bulletin Board · nemweb.com.au'}
+          {tab === 'gas' ? 'AEMO Gas Bulletin Board · nemweb.com.au' : 'Open Electricity API · openelectricity.org.au'}
         </span>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)', letterSpacing: '0.04em' }}>
           Data refreshes hourly

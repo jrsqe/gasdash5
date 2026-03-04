@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, Cell
+  Legend, ResponsiveContainer
 } from 'recharts'
 import { useElecData } from './MainDashboard'
 
