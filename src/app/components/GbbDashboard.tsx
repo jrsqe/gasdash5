@@ -248,35 +248,37 @@ const XAXIS_TICK = { fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-dat
 
 // Build a smart ticks array for the x-axis: picks ~8 evenly-spaced dates
 // and formats them as Mon/YY for long ranges or DD/Mon for short ones.
-function smartTicks(dates: string[], dateRange: string): { ticks: string[]; formatter: (v:string) => string } {
-  if (!dates.length) return { ticks: [], formatter: v => v }
-  const n = dates.length
-  // Target ~8 ticks regardless of range
+// Chart rows use fmtD values as keys (e.g. "15/03/25").
+// smartTicks receives the already-formatted sliced date labels and picks ~8
+// evenly-spaced ones. For "all" view it reformats them as "Mon YY".
+function smartTicks(fmtDates: string[], dateRange: string): { ticks: string[]; formatter: (v:string) => string } {
+  if (!fmtDates.length) return { ticks: fmtDates, formatter: v => v }
+  const n = fmtDates.length
   const target = 8
   const step = Math.max(1, Math.floor(n / target))
   const ticks: string[] = []
-  for (let i = 0; i < n; i += step) ticks.push(dates[i])
-  // Always include the last date
-  if (ticks[ticks.length - 1] !== dates[n - 1]) ticks.push(dates[n - 1])
+  for (let i = 0; i < n; i += step) ticks.push(fmtDates[i])
+  if (ticks[ticks.length - 1] !== fmtDates[n - 1]) ticks.push(fmtDates[n - 1])
 
-  // For "all" (365 days) show Mon YY, for shorter ranges show DD Mon
+  const MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  // fmtD format is "DD/MM/YY" — reformat for "all" view as "Mon YY"
   const formatter = dateRange === 'all'
     ? (v: string) => {
-        const [yyyy, mm] = v.split('-')
-        const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mm??'1')-1] ?? ''
-        return `${mon} ${(yyyy??'').slice(2)}`
+        const parts = v.split('/')   // ["DD","MM","YY"]
+        const mon = MONS[parseInt(parts[1] ?? '1') - 1] ?? ''
+        return `${mon} ${parts[2] ?? ''}`
       }
     : (v: string) => {
-        const [, mm, dd] = v.split('-')
-        const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mm??'1')-1] ?? ''
-        return `${parseInt(dd??'0')} ${mon}`
+        const parts = v.split('/')
+        const mon = MONS[parseInt(parts[1] ?? '1') - 1] ?? ''
+        return `${parseInt(parts[0] ?? '0')} ${mon}`
       }
   return { ticks, formatter }
 }
 
 const XAXIS_PROPS = {
   tick: XAXIS_TICK,
-  tickLine:false, axisLine:{ stroke:'var(--border)' }, interval:'preserveStartEnd' as const,
+  tickLine:false, axisLine:{ stroke:'var(--border)' },
 }
 const YAXIS_PROPS = {
   tick:{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' },
@@ -362,7 +364,7 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={rows} margin={CHART_MARGIN}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced,range).ticks} tickFormatter={smartTicks(sliced,range).formatter} />
+            <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
             <YAxis {...YAXIS_PROPS} />
             <Tooltip content={<SqTooltip unit="TJ" />} />
             <Legend wrapperStyle={LEGEND_STYLE} />
@@ -428,7 +430,7 @@ function StoragePanel({ dates, storageByFacility }: {
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={levelRows} margin={CHART_MARGIN}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced,range).ticks} tickFormatter={smartTicks(sliced,range).formatter} />
+            <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
             <YAxis {...YAXIS_PROPS} tickFormatter={v => fmt0(v)} />
             <Tooltip content={<SqTooltip unit="TJ" />} />
             <Legend wrapperStyle={LEGEND_STYLE} />
@@ -442,7 +444,7 @@ function StoragePanel({ dates, storageByFacility }: {
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={flowRows} margin={CHART_MARGIN}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced,range).ticks} tickFormatter={smartTicks(sliced,range).formatter} />
+            <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
             <YAxis {...YAXIS_PROPS} />
             <ReferenceLine y={0} stroke="var(--border-2)" />
             <Tooltip content={<SqTooltip unit="TJ" />} />
@@ -530,7 +532,7 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={rows} margin={CHART_MARGIN}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-          <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced,range).ticks} tickFormatter={smartTicks(sliced,range).formatter} />
+          <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
           <YAxis {...YAXIS_PROPS} />
           <Tooltip content={<SqTooltip unit="TJ" />} />
           <Legend wrapperStyle={LEGEND_STYLE} />
@@ -726,7 +728,7 @@ function PipelinePanel({ dates, pipelineFlows }: {
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={chartRows} margin={CHART_MARGIN}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced,range).ticks} tickFormatter={smartTicks(sliced,range).formatter} />
+          <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
           <YAxis {...YAXIS_PROPS} />
           <Tooltip content={<SqTooltip unit="TJ" />} />
           <Legend wrapperStyle={LEGEND_STYLE} />
@@ -759,7 +761,7 @@ function PipelinePanel({ dates, pipelineFlows }: {
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={utilRows} margin={CHART_MARGIN}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced,range).ticks} tickFormatter={smartTicks(sliced,range).formatter} />
+                <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
                 <YAxis {...YAXIS_PROPS} domain={[0, 110]} tickFormatter={v => `${v}%`} width={42} />
                 <ReferenceLine y={100} stroke="var(--negative)" strokeDasharray="4 2" strokeWidth={1.5} label={{ value:'100%', position:'insideTopRight', fontSize:9, fill:'var(--negative)', fontFamily:'var(--font-data)' }} />
                 <ReferenceLine y={70}  stroke="var(--neutral)"  strokeDasharray="4 2" strokeWidth={1}   label={{ value:'70%',  position:'insideTopRight', fontSize:9, fill:'var(--neutral)',  fontFamily:'var(--font-data)' }} />
