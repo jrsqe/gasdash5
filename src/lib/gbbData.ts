@@ -75,23 +75,42 @@ const PIPELINE_NODES: Record<string, { receipt: string; delivery: string; when?:
   'PCA':     [{ receipt: '1305050', delivery: '1505088' }],
 }
 
-async function fetchCapacities(mostRecentGasDate: string, latestFlows: Record<string, number | null>): Promise<{
+async function fetchCapacities(mostRecentGasDate: string, latestSignedFlows: Record<string, number | null>): Promise<{
   nameplate: Record<string, number | null>
   stc:       Record<string, number | null>
 }> {
   const nameplate: Record<string, number | null> = {}
   const stc:       Record<string, number | null> = {}
 
-  // Helper: parse CSV text into array-of-objects (case-insensitive header lookup)
+  // Helper: parse CSV text into array-of-objects, handling quoted fields
   function parseFlatCsv(text: string) {
     const lines = text.split('\n').filter(l => l.trim())
     if (lines.length < 2) return { rows: [], col: (_n: string) => -1 }
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+
+    function splitCsvLine(line: string): string[] {
+      const result: string[] = []
+      let cur = '', inQ = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (ch === '"') {
+          if (inQ && line[i+1] === '"') { cur += '"'; i++ }
+          else inQ = !inQ
+        } else if (ch === ',' && !inQ) {
+          result.push(cur.trim()); cur = ''
+        } else {
+          cur += ch
+        }
+      }
+      result.push(cur.trim())
+      return result
+    }
+
+    const headers = splitCsvLine(lines[0])
     const col = (name: string) => {
       const lo = name.toLowerCase()
       return headers.findIndex(h => h.toLowerCase() === lo)
     }
-    const rows = lines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
+    const rows = lines.slice(1).map(l => splitCsvLine(l))
     return { rows, col }
   }
 
@@ -118,7 +137,7 @@ async function fetchCapacities(mostRecentGasDate: string, latestFlows: Record<st
 
     for (const [pipe, pairs] of Object.entries(PIPELINE_NODES)) {
       const facName   = pipe.startsWith('VTS') ? 'VTS' : pipe
-      const flowVal   = latestFlows[pipe] ?? null
+      const flowVal   = latestSignedFlows[pipe] ?? null
       // Filter pairs by direction: 'positive'/'negative' only when we know flow direction
       const activePairs = pairs.filter(p => {
         if (!p.when || p.when === 'any') return true
@@ -166,7 +185,7 @@ async function fetchCapacities(mostRecentGasDate: string, latestFlows: Record<st
 
     for (const [pipe, pairs] of Object.entries(PIPELINE_NODES)) {
       const facName   = pipe.startsWith('VTS') ? 'VTS' : pipe
-      const flowVal   = latestFlows[pipe] ?? null
+      const flowVal   = latestSignedFlows[pipe] ?? null
       const activePairs = pairs.filter(p => {
         if (!p.when || p.when === 'any') return true
         if (flowVal === null) return true
@@ -424,18 +443,42 @@ export async function getGbbData(): Promise<GbbTimeseries> {
     }
   }
 
-  // Attach capacity data to each pipeline entry
-  const latestFlows: Record<string, number | null> = {}
-  for (const [pipe, entry] of Object.entries(pipelineFlows)) {
-    const flow = entry.flow
-    for (let i = flow.length - 1; i >= 0; i--) {
-      if (flow[i] != null) { latestFlows[pipe] = flow[i]; break }
+  // Attach capacity data to each pipeline entry.
+  // We need the SIGNED latest flow (not abs) to determine direction for
+  // bidirectional pipelines (VTS-SWP, VTS-VNI, MSP, etc.)
+  // Re-derive signed values from the raw data for the most recent date.
+  const latestSignedFlows: Record<string, number | null> = {}
+  if (recentDates.length > 0) {
+    // Walk dates from most recent backwards until we find a date with data
+    for (let di = recentDates.length - 1; di >= 0; di--) {
+      const d = recentDates[di]
+      const dateRows = byDate.get(d)
+      if (!dateRows) continue
+      let anyFound = false
+      for (const rule of PIPELINE_RULES) {
+        if (latestSignedFlows[rule.shortName] !== undefined) continue
+        const signed = calcPipelineFlow(dateRows, rule)
+        if (signed !== 0 || dateRows.length > 0) {
+          latestSignedFlows[rule.shortName] = signed
+          anyFound = true
+        }
+      }
+      if (anyFound && Object.keys(latestSignedFlows).length >= PIPELINE_RULES.length) break
     }
   }
-  const capacities = await fetchCapacities(mostRecentGasDate, latestFlows)
+  console.log('[gbbData] latestSignedFlows:', JSON.stringify(latestSignedFlows))
+  const capacities = await fetchCapacities(mostRecentGasDate, latestSignedFlows)
+  console.log('[gbbData] nameplate capacities:', JSON.stringify(capacities.nameplate))
+  console.log('[gbbData] stc capacities:', JSON.stringify(capacities.stc))
   for (const pipe of Object.keys(pipelineFlows)) {
     pipelineFlows[pipe].nameplateCapacity = capacities.nameplate[pipe] ?? null
     pipelineFlows[pipe].stcCapacity       = capacities.stc[pipe]       ?? null
+  }
+  // Log VTS entries specifically for debugging
+  for (const p of ['VTS-LMP','VTS-SWP','VTS-VNI']) {
+    if (pipelineFlows[p]) {
+      console.log(`[gbbData] ${p}: np=${pipelineFlows[p].nameplateCapacity} stc=${pipelineFlows[p].stcCapacity} flow=${pipelineFlows[p].flow.slice(-1)[0]}`)
+    }
   }
 
   return {
