@@ -76,6 +76,8 @@ function CsvButton({ onClick }: { onClick: () => void }) {
   )
 }
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
 function tickFmt(val: string) {
   if (!val) return ''
   const [date, time] = val.split(' ')
@@ -83,6 +85,33 @@ function tickFmt(val: string) {
   const [yyyy,mm,dd] = date.split('-')
   const yy = yyyy?.slice(2) ?? ''
   return `${dd}/${mm}/${yy} ${time}`
+}
+
+// Smart tick sampler for electricity datetime strings.
+// For "all" view, samples ~8 evenly-spaced ticks and formats as "DD Mon YY".
+// For shorter views, keeps recharts default behaviour (pass null ticks).
+function elecSmartTicks(rows: any[], dateRange: string): {
+  ticks: string[] | undefined
+  formatter: (v: string) => string
+} {
+  if (dateRange !== 'default' || rows.length === 0) {
+    // Short view: use existing tickFmt (date + time)
+    return { ticks: undefined, formatter: tickFmt }
+  }
+  // "All" view: pick ~8 evenly-spaced rows, format as "DD Mon YY"
+  const n = rows.length
+  const target = 8
+  const step = Math.max(1, Math.floor(n / target))
+  const ticks: string[] = []
+  for (let i = 0; i < n; i += step) ticks.push(rows[i].datetime)
+  if (ticks[ticks.length-1] !== rows[n-1].datetime) ticks.push(rows[n-1].datetime)
+  const formatter = (val: string) => {
+    const date = val.split(' ')[0] ?? ''
+    const [yyyy, mm, dd] = date.split('-')
+    const mon = MONTHS[parseInt(mm ?? '1') - 1] ?? ''
+    return `${parseInt(dd ?? '0')} ${mon} ${(yyyy ?? '').slice(2)}`
+  }
+  return { ticks, formatter }
 }
 
 // ── Shared UI atoms ────────────────────────────────────────────────────────────
@@ -252,7 +281,9 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
               ))}
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="datetime" tickFormatter={tickFmt}
+            <XAxis dataKey="datetime"
+              ticks={elecSmartTicks(chartRows, dateRange).ticks}
+              tickFormatter={elecSmartTicks(chartRows, dateRange).formatter}
               tick={{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={{ stroke:'var(--border)' }} interval="preserveStartEnd" />
             <YAxis yAxisId="gen"

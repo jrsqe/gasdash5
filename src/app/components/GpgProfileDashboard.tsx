@@ -15,11 +15,12 @@ const EXT_PEAK_MAX = 13   // 5–13h → extended peak
 
 type RunClass = 'peak' | 'extended' | 'baseload' | 'none'
 
+// Monochromatic blue-grey: darkest at bottom (baseload) → lightest at top (none)
 const CLASS_COLOURS: Record<RunClass, string> = {
-  none:     '#E8E6E1',
-  peak:     '#1B5E7B',
-  extended: '#B5880C',
-  baseload: '#2E7D4F',
+  baseload: '#1B3A5C',   // darkest — most committed generation
+  extended: '#3D6A96',   // mid-dark
+  peak:     '#7AAED0',   // mid-light
+  none:     '#D6E8F5',   // lightest — no generation
 }
 const CLASS_LABELS: Record<RunClass, string> = {
   none:     'No generation',
@@ -83,35 +84,35 @@ function buildWeeklyProfile(
 ): WeekData[] {
   if (!rows.length || !facilities.length) return []
 
-  // Sum all facilities per row → total generation per hour
-  const hourly: { dt: Date; total: number | null }[] = rows.map(r => {
-    const dt = new Date(r.datetime)
-    let sum = 0, hasAny = false
-    for (const f of facilities) {
-      const v = r[f]
-      if (v != null && !isNaN(v)) { sum += v; hasAny = true }
-    }
-    return { dt, total: hasAny ? sum : null }
-  })
-
-  // Classify each hour
-  const classes = classifyHours(hourly.map(h => h.total))
-
-  // Group by ISO week
+  // Classify each facility independently, then aggregate hour-counts per week.
+  // This ensures a unit running 3h contributes 3h of 'peak' regardless of
+  // what other units are doing at the same time.
   const weekMap = new Map<string, { counts: Record<RunClass, number>; weekStart: Date }>()
-  for (let i = 0; i < hourly.length; i++) {
-    const { dt } = hourly[i]
-    const cls = classes[i]
-    const wk  = weekLabel(dt)
-    if (!weekMap.has(wk)) {
-      // Find Monday of this week
-      const mon = new Date(dt)
-      const day = mon.getDay() || 7
-      mon.setDate(mon.getDate() - day + 1)
-      mon.setHours(0, 0, 0, 0)
-      weekMap.set(wk, { counts: { none: 0, peak: 0, extended: 0, baseload: 0 }, weekStart: mon })
+
+  for (const fac of facilities) {
+    // Build hourly generation series for this unit
+    const values = rows.map(r => {
+      const v = r[fac]
+      return (v != null && !isNaN(v)) ? (v as number) : null
+    })
+
+    // Classify this unit's hours
+    const classes = classifyHours(values)
+
+    // Accumulate into week buckets
+    for (let i = 0; i < rows.length; i++) {
+      const dt  = new Date(rows[i].datetime)
+      const cls = classes[i]
+      const wk  = weekLabel(dt)
+      if (!weekMap.has(wk)) {
+        const mon = new Date(dt)
+        const day = mon.getDay() || 7
+        mon.setDate(mon.getDate() - day + 1)
+        mon.setHours(0, 0, 0, 0)
+        weekMap.set(wk, { counts: { none: 0, peak: 0, extended: 0, baseload: 0 }, weekStart: mon })
+      }
+      weekMap.get(wk)!.counts[cls]++
     }
-    weekMap.get(wk)!.counts[cls]++
   }
 
   // Convert to percentages, sort by date
@@ -220,7 +221,8 @@ function RegionProfile({ region, data }: { region: 'NSW' | 'VIC'; data: any }) {
           <XAxis
             dataKey="week"
             tick={{ fontFamily: 'var(--font-data)', fontSize: 10, fill: 'var(--muted)' }}
-            angle={-45} textAnchor="end" interval={0}
+            angle={-45} textAnchor="end"
+            interval={Math.max(0, Math.floor(weeklyData.length / 8) - 1)}
           />
           <YAxis
             tickFormatter={v => `${v}%`}
@@ -233,10 +235,10 @@ function RegionProfile({ region, data }: { region: 'NSW' | 'VIC'; data: any }) {
             formatter={(value) => CLASS_LABELS[value as RunClass]}
             wrapperStyle={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem', paddingTop: '0.5rem' }}
           />
-          <Bar dataKey="none"     stackId="a" fill={CLASS_COLOURS.none}     name="none"     />
-          <Bar dataKey="peak"     stackId="a" fill={CLASS_COLOURS.peak}     name="peak"     />
+          <Bar dataKey="baseload" stackId="a" fill={CLASS_COLOURS.baseload} name="baseload" />
           <Bar dataKey="extended" stackId="a" fill={CLASS_COLOURS.extended} name="extended" />
-          <Bar dataKey="baseload" stackId="a" fill={CLASS_COLOURS.baseload} name="baseload"
+          <Bar dataKey="peak"     stackId="a" fill={CLASS_COLOURS.peak}     name="peak"     />
+          <Bar dataKey="none"     stackId="a" fill={CLASS_COLOURS.none}     name="none"
             radius={[2,2,0,0]} />
         </BarChart>
       </ResponsiveContainer>
