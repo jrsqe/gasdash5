@@ -343,16 +343,6 @@ export async function getGbbData(): Promise<GbbTimeseries> {
   const mostRecentGasDate = recentDates[recentDates.length - 1] // YYYY-MM-DD
   const rows = allRows.filter(r => recentDates.includes(r.GasDate))
 
-  // Fetch capacities using the most recent gas date and latest flow sign for direction-aware matching
-  const latestFlows: Record<string, number | null> = {}
-  for (const [pipe, entry] of Object.entries(pipelineFlows)) {
-    const flow = entry.flow
-    for (let i = flow.length - 1; i >= 0; i--) {
-      if (flow[i] != null) { latestFlows[pipe] = flow[i]; break }
-    }
-  }
-  const capacities = await fetchCapacities(mostRecentGasDate, latestFlows)
-
   // Helper: get or create array
   const ensureArr = (obj: Record<string, any>, key: string, len: number) => {
     if (!obj[key]) obj[key] = new Array(len).fill(null)
@@ -435,6 +425,14 @@ export async function getGbbData(): Promise<GbbTimeseries> {
   }
 
   // Attach capacity data to each pipeline entry
+  const latestFlows: Record<string, number | null> = {}
+  for (const [pipe, entry] of Object.entries(pipelineFlows)) {
+    const flow = entry.flow
+    for (let i = flow.length - 1; i >= 0; i--) {
+      if (flow[i] != null) { latestFlows[pipe] = flow[i]; break }
+    }
+  }
+  const capacities = await fetchCapacities(mostRecentGasDate, latestFlows)
   for (const pipe of Object.keys(pipelineFlows)) {
     pipelineFlows[pipe].nameplateCapacity = capacities.nameplate[pipe] ?? null
     pipelineFlows[pipe].stcCapacity       = capacities.stc[pipe]       ?? null
