@@ -9,28 +9,25 @@ function getHeaders() {
 }
 
 export async function GET() {
-  const results: Record<string, any> = {}
+  // Test /data/facilities/NEM?fueltech_id=coal_black — the approach now used in fetchFuelMix
+  const url = `${BASE_URL}/data/facilities/NEM?metrics=power&network_region=NSW1&interval=1d&fueltech_id=coal_black`
+  const res  = await fetch(url, { headers: getHeaders(), cache: 'no-store' })
+  const json = await res.json()
 
-  // Test 3 different query approaches with 1d interval (small response)
-  const tests = [
-    { key: 'A_primaryGroupingFueltech', url: `${BASE_URL}/data/network/NEM?metrics=power&network_region=NSW1&interval=1d&primary_grouping=fueltech` },
-    { key: 'B_fueltechIdCoal',          url: `${BASE_URL}/data/network/NEM?metrics=power&network_region=NSW1&interval=1d&fueltech_id=coal_black` },
-    { key: 'C_noFilter',                url: `${BASE_URL}/data/network/NEM?metrics=power&network_region=NSW1&interval=1d` },
-  ]
-
-  for (const { key, url } of tests) {
-    try {
-      const res  = await fetch(url, { headers: getHeaders(), cache: 'no-store' })
-      const json = await res.json()
-
-      // Return the FULL raw response so we can see exactly what comes back
-      results[key] = { url, status: res.status, raw: json }
-    } catch (e: any) {
-      results[key] = { url, error: e.message }
-    }
-  }
-
-  return NextResponse.json(results, {
-    headers: { 'Content-Type': 'application/json' }
+  const d0 = json.data?.[0]
+  return NextResponse.json({
+    url, status: res.status,
+    dataLen: json.data?.length,
+    item0Keys: d0 ? Object.keys(d0) : [],
+    hasResults: !!d0?.results,
+    resultsLen: d0?.results?.length,
+    result0: d0?.results?.[0] ? {
+      keys: Object.keys(d0.results[0]),
+      columns: d0.results[0].columns,
+      dataLen: d0.results[0].data?.length,
+      first3: d0.results[0].data?.slice(0, 3),
+    } : null,
+    // How many distinct unit series came back?
+    allResultNames: (d0?.results ?? []).map((r: any) => r.name ?? r.columns),
   })
 }
