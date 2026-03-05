@@ -238,7 +238,7 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
     fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: 'var(--accent)',
     background: 'var(--surface-2)', border: '1px solid var(--border)',
     padding: '2px 8px', borderRadius: 5, fontWeight: 600,
-    cursor: 'pointer', userSelect: 'none',
+    cursor: 'pointer', userSelect: 'none' as const,
   }
 
   return (
