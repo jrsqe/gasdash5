@@ -306,20 +306,20 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
   const { dates, series } = fuelMix
   const present = FUEL_MIX_ORDER.filter(f => series[f])
 
-  // Window slicing — mirror RegionPanel logic
+  // Window slicing — keep in sync with RegionPanel via shared dateRange/windowSize props
   const [windowEnd, setWindowEnd] = useState(dates.length - 1)
   useEffect(() => { setWindowEnd(dates.length - 1) }, [dateRange, dates.length])
 
-  const sliced = useMemo(() => {
-    if (dateRange === 'default') return dates
-    return dates.slice(Math.max(0, windowEnd - windowSize + 1), windowEnd + 1)
+  // Compute slice bounds inside useMemo so sliceStart stays reactive
+  const { slicedDates, sliceStart } = useMemo(() => {
+    if (dateRange === 'default') return { slicedDates: dates, sliceStart: 0 }
+    const start = Math.max(0, windowEnd - windowSize + 1)
+    return { slicedDates: dates.slice(start, windowEnd + 1), sliceStart: start }
   }, [dates, dateRange, windowSize, windowEnd])
 
-  const sliceStart = dateRange === 'default' ? 0 : Math.max(0, windowEnd - windowSize + 1)
-
-  // Build chart rows as % of total
+  // Build chart rows as % of total — uses reactive sliceStart
   const chartRows = useMemo(() => {
-    return sliced.map((dt, i) => {
+    return slicedDates.map((dt, i) => {
       const gi  = sliceStart + i
       const row: Record<string, any> = { datetime: dt }
       const total = present.reduce((s, f) => s + (series[f]?.[gi] ?? 0), 0)
@@ -329,29 +329,22 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
       }
       return row
     })
-  }, [sliced, sliceStart, series, present])
+  }, [slicedDates, sliceStart, series, present])
 
-  // Summary stats — most recent and max gas share over period
-  const summaryRows = useMemo(() => {
-    if (dateRange === 'default') return dates.map((_, i) => i)
-    return Array.from({ length: Math.min(windowSize, dates.length) },
-      (_, i) => Math.max(0, windowEnd - windowSize + 1) + i)
-  }, [dates, dateRange, windowSize, windowEnd])
-
-  const gasShares = useMemo(() => summaryRows.map(gi => {
-    const total = present.reduce((s, f) => s + (series[f]?.[gi] ?? 0), 0)
-    const gas   = series['Gas']?.[gi] ?? 0
-    return total > 0 ? gas / total * 100 : null
-  }).filter((v): v is number => v !== null), [summaryRows, series, present])
-
-  const latestGi   = summaryRows[summaryRows.length - 1] ?? 0
-  const latestTotal = present.reduce((s, f) => s + (series[f]?.[latestGi] ?? 0), 0)
-  const latestGas   = series['Gas']?.[latestGi] ?? 0
-  const latestGasPct = latestTotal > 0 ? (latestGas / latestTotal * 100) : null
-  const maxGasPct    = gasShares.length ? Math.max(...gasShares) : null
-  const latestDt     = dates[latestGi] ?? ''
-
-  const fmtLabel = (d: string) => { const [,mm,dd] = d.split(' ')[0].split('-'); return `${dd}/${mm}` }
+  // Gas share stats over current view window
+  const { latestGasPct, maxGasPct, latestDt } = useMemo(() => {
+    if (!chartRows.length) return { latestGasPct: null, maxGasPct: null, latestDt: '' }
+    let maxPct = 0
+    for (const row of chartRows) {
+      const total = present.reduce((s, f) => s + (row[f] ?? 0), 0)
+      const gas   = row['Gas'] ?? 0
+      // chartRows values are already %, total should be ~100
+      if (gas > maxPct) maxPct = gas
+    }
+    const lastRow  = chartRows[chartRows.length - 1]
+    const latestPct = lastRow?.['Gas'] ?? null
+    return { latestGasPct: latestPct, maxGasPct: maxPct || null, latestDt: lastRow?.datetime ?? '' }
+  }, [chartRows, present])''
 
   // Smart ticks for x-axis
   const tickDates = useMemo(() => {

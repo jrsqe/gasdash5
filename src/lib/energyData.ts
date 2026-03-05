@@ -2,16 +2,6 @@ const BASE_URL = 'https://api.openelectricity.org.au/v4'
 const GAS_FUELTECHS = new Set(['gas_ccgt', 'gas_ocgt', 'gas_recip', 'gas_steam', 'gas_wcmg'])
 const REGIONS = ['NSW1', 'VIC1']
 
-// Fuel mix groupings — map OE fueltech IDs → display category
-const FUEL_MIX_GROUPS: Record<string, string> = {
-  coal_black:   'Coal', coal_brown:   'Coal',
-  wind:         'Wind', wind_offshore: 'Wind',
-  solar_utility:'Solar', solar_rooftop:'Solar',
-  gas_ccgt:     'Gas',  gas_ocgt: 'Gas', gas_recip: 'Gas', gas_steam: 'Gas', gas_wcmg: 'Gas',
-  battery_discharging: 'Battery',
-  imports:      'Imports',
-  distillate:   'Gas',   // peaking diesel — minor, lump with gas or omit
-}
 const FUEL_MIX_ORDER = ['Coal','Gas','Wind','Solar','Battery','Imports']
 
 
@@ -107,70 +97,53 @@ function aggregateFacility(unitSeries: Record<string, [string, number][]>, inter
 }
 
 
+// Fueltech IDs to fetch per display category
+const FETCH_FUELTECHS: Record<string, string[]> = {
+  Coal:    ['coal_black', 'coal_brown'],
+  Wind:    ['wind', 'wind_offshore'],
+  Solar:   ['solar_utility', 'solar_rooftop'],
+  Gas:     ['gas_ccgt', 'gas_ocgt', 'gas_recip', 'gas_steam', 'gas_wcmg'],
+  Battery: ['battery_discharging'],
+  Imports: ['imports'],
+}
+
+// Parse a single-fueltech network response — handles both v4 formats
+function parseFueltechSeries(resp: any): [string, number][] {
+  const pts: [string, number][] = []
+  for (const series of resp.data ?? []) {
+    // Format A: series.results[].data — array of [datetime, value]
+    for (const item of series.results ?? []) {
+      for (const entry of item.data ?? []) {
+        if (Array.isArray(entry) && entry.length === 2) {
+          const [ts, v] = entry
+          if (typeof v === 'number') pts.push([String(ts), v])
+        }
+      }
+    }
+    // Format B: series.history — {start, interval, data:[values]}
+    if (!series.results && series.history?.start) {
+      const { start, data: values, interval: iv } = series.history
+      const mins = iv === '5m' ? 5 : iv === '1h' ? 60 : 1440
+      let dt = new Date(start)
+      for (const v of values ?? []) {
+        if (typeof v === 'number') pts.push([dt.toISOString(), v])
+        dt = new Date(dt.getTime() + mins * 60000)
+      }
+    }
+  }
+  return pts
+}
+
 async function fetchFuelMix(region: string, interval: string): Promise<{
   dates: string[]
   series: Record<string, (number | null)[]>
 }> {
   const raw: Record<string, Record<string, number>> = {}
 
-  try {
-    // Fetch network-level generation grouped by fueltech
-    const resp = await apiFetch(`${BASE_URL}/data/network/NEM`, {
-      metrics:          'power',
-      network_region:   region,
-      interval,
-      secondary_grouping: 'fueltech',
-    })
-
-    // The OE API returns each fueltech as a separate series entry
-    for (const series of resp.data ?? []) {
-      // results[] array format (v4 grouped)
-      for (const item of series.results ?? []) {
-        const ftId: string = item.columns?.fueltech_id ?? item.fueltech_id ?? ''
-        const group = FUEL_MIX_GROUPS[ftId]
-        if (!group) continue
-        if (!raw[group]) raw[group] = {}
-        for (const entry of item.data ?? []) {
-          if (Array.isArray(entry) && entry.length === 2) {
-            const key = toAEST(String(entry[0]))
-            const val = Number(entry[1])
-            if (!isNaN(val) && val > 0) raw[group][key] = (raw[group][key] ?? 0) + val
-          }
-        }
-      }
-      // Flat history format
-      if (!series.results && series.history?.start) {
-        const ftId: string = series.fueltech_id ?? series.columns?.fueltech_id ?? ''
-        const group = FUEL_MIX_GROUPS[ftId]
-        if (!group) continue
-        if (!raw[group]) raw[group] = {}
-        const { start, data: values, interval: iv } = series.history
-        const mins = iv === '5m' ? 5 : iv === '1h' ? 60 : 1440
-        let dt = new Date(start)
-        for (const v of values ?? []) {
-          if (typeof v === 'number' && v > 0) {
-            raw[group][toAEST(dt.toISOString())] = (raw[group][toAEST(dt.toISOString())] ?? 0) + v
-          }
-          dt = new Date(dt.getTime() + mins * 60000)
-        }
-      }
-    }
-  } catch (e) {
-    console.warn(`Fuel mix primary fetch failed for ${region}:`, e)
-  }
-
-  // If primary fetch empty, fall back to per-fueltech requests using the working facility endpoint pattern
-  if (Object.keys(raw).length === 0) {
-    const FETCH_FUELTECHS: Record<string, string[]> = {
-      Coal:    ['coal_black', 'coal_brown'],
-      Wind:    ['wind'],
-      Solar:   ['solar_utility', 'solar_rooftop'],
-      Gas:     ['gas_ccgt', 'gas_ocgt', 'gas_recip', 'gas_steam'],
-      Battery: ['battery_discharging'],
-      Imports: ['imports'],
-    }
-    for (const [group, ftIds] of Object.entries(FETCH_FUELTECHS)) {
-      for (const ftId of ftIds) {
+  // Fetch each fueltech individually — same pattern as the working price/generation calls
+  await Promise.all(
+    Object.entries(FETCH_FUELTECHS).map(async ([group, ftIds]) => {
+      await Promise.all(ftIds.map(async ftId => {
         try {
           const resp = await apiFetch(`${BASE_URL}/data/network/NEM`, {
             metrics:        'power',
@@ -178,21 +151,24 @@ async function fetchFuelMix(region: string, interval: string): Promise<{
             interval,
             fueltech_id:    ftId,
           })
+          const pts = parseFueltechSeries(resp)
+          if (pts.length === 0) return
           if (!raw[group]) raw[group] = {}
-          const parsed = parseTimeseries(resp)
-          for (const pts of Object.values(parsed)) {
-            for (const [ts, v] of pts) {
-              if (typeof v === 'number' && v > 0) {
-                raw[group][toAEST(ts)] = (raw[group][toAEST(ts)] ?? 0) + v
-              }
+          for (const [ts, v] of pts) {
+            if (v > 0) {
+              const key = toAEST(ts)
+              raw[group][key] = (raw[group][key] ?? 0) + v
             }
           }
-        } catch { /* skip missing fueltechs */ }
-      }
-    }
-  }
+        } catch { /* fueltech not present in this region — skip */ }
+      }))
+    })
+  )
 
-  const allDates = Array.from(new Set(Object.values(raw).flatMap(m => Object.keys(m)))).sort()
+  const allDates = Array.from(
+    new Set(Object.values(raw).flatMap(m => Object.keys(m)))
+  ).sort()
+
   const series: Record<string, (number | null)[]> = {}
   for (const grp of FUEL_MIX_ORDER) {
     if (raw[grp] && Object.keys(raw[grp]).length > 0) {
