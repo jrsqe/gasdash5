@@ -143,7 +143,7 @@ function SqTooltip({ active, payload, label }: any) {
         <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', gap: '1.25rem', marginBottom: 2 }}>
           <span style={{ color: p.color ?? p.fill }}>{p.name}</span>
           <span style={{ color: 'var(--text)', fontWeight: 600 }}>
-            {p.name === 'Spot Price ($/MWh)' ? `$${Number(p.value).toFixed(2)}` : `${Number(p.value).toFixed(1)} MW`}
+            {p.name === 'Elec. Spot Price ($/MWh)' ? `$${Number(p.value).toFixed(2)}` : `${Number(p.value).toFixed(1)} MW`}
           </span>
         </div>
       ))}
@@ -186,34 +186,112 @@ function PillGroup<T extends string>({
   )
 }
 
-function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, lastLabel, windowStartLabel, windowEndLabel }: any) {
+function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, lastLabel, windowStartLabel, windowEndLabel, allDates }: any) {
+  // allDates: full array of date strings for typed input lookup
+  const [editingStart, setEditingStart] = useState(false)
+  const [editingEnd,   setEditingEnd]   = useState(false)
+  const [startInput,   setStartInput]   = useState('')
+  const [endInput,     setEndInput]     = useState('')
+
   if (totalRows === 0 || windowSize >= totalRows) return null
   const min = windowSize - 1, max = totalRows - 1
+
+  // Parse a typed DD/MM date string into a row index (find closest in allDates)
+  const findIdx = (txt: string): number | null => {
+    if (!allDates?.length || !txt.trim()) return null
+    const [dd, mm] = txt.split('/').map(Number)
+    if (!dd || !mm) return null
+    // Match against YYYY-MM-DD HH:MM format
+    const candidates = allDates
+      .map((d: string, i: number) => {
+        const parts = d.split('-')
+        return { i, m: parseInt(parts[1] ?? '0'), day: parseInt((parts[2] ?? '').slice(0,2)) }
+      })
+      .filter((x: any) => x.m === mm && x.day === dd)
+    return candidates.length ? candidates[0].i : null
+  }
+
+  const commitStart = () => {
+    const idx = findIdx(startInput)
+    if (idx !== null) {
+      // windowEnd must stay >= idx + windowSize - 1
+      const newEnd = Math.max(windowEnd, idx + windowSize - 1)
+      onChange(Math.min(newEnd, max))
+    }
+    setEditingStart(false)
+    setStartInput('')
+  }
+  const commitEnd = () => {
+    const idx = findIdx(endInput)
+    if (idx !== null) onChange(Math.min(Math.max(idx, min), max))
+    setEditingEnd(false)
+    setEndInput('')
+  }
+
+  const inputStyle = {
+    fontFamily: 'var(--font-data)', fontSize: '0.72rem', fontWeight: 600,
+    color: 'var(--accent)', background: 'var(--surface)',
+    border: '1px solid var(--accent)', borderRadius: 5,
+    padding: '2px 6px', width: 62, outline: 'none', textAlign: 'center',
+  }
+  const labelStyle = {
+    fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: 'var(--accent)',
+    background: 'var(--surface-2)', border: '1px solid var(--border)',
+    padding: '2px 8px', borderRadius: 5, fontWeight: 600,
+    cursor: 'pointer', userSelect: 'none',
+  }
+
   return (
-    <div style={{ marginTop: '0.85rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--muted)' }}>{firstLabel}</span>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: 'var(--accent)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '1px 8px', borderRadius: 5, fontWeight: 600 }}>
-          {windowStartLabel} → {windowEndLabel}
-        </span>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--muted)' }}>{lastLabel}</span>
+    <div style={{ marginTop: '1rem' }}>
+      {/* Date range display / inputs */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', gap: '0.5rem' }}>
+        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)' }}>{firstLabel}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          {editingStart ? (
+            <input autoFocus value={startInput} onChange={e => setStartInput(e.target.value)}
+              onBlur={commitStart} onKeyDown={e => e.key === 'Enter' && commitStart()}
+              placeholder="DD/MM" style={inputStyle} />
+          ) : (
+            <span style={labelStyle} onClick={() => { setEditingStart(true); setStartInput(windowStartLabel) }}
+              title="Click to type a date (DD/MM)">{windowStartLabel}</span>
+          )}
+          <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>→</span>
+          {editingEnd ? (
+            <input autoFocus value={endInput} onChange={e => setEndInput(e.target.value)}
+              onBlur={commitEnd} onKeyDown={e => e.key === 'Enter' && commitEnd()}
+              placeholder="DD/MM" style={inputStyle} />
+          ) : (
+            <span style={labelStyle} onClick={() => { setEditingEnd(true); setEndInput(windowEndLabel) }}
+              title="Click to type a date (DD/MM)">{windowEndLabel}</span>
+          )}
+        </div>
+        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)' }}>{lastLabel}</span>
       </div>
-      <div style={{ position: 'relative', height: 24, display: 'flex', alignItems: 'center' }}>
-        <div style={{ position: 'absolute', left: 0, right: 0, height: 4, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 2 }} />
+
+      {/* Slider track — taller hit area */}
+      <div style={{ position: 'relative', height: 36, display: 'flex', alignItems: 'center' }}>
+        {/* Track */}
+        <div style={{ position: 'absolute', left: 0, right: 0, height: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 3 }} />
+        {/* Filled range */}
         <div style={{
           position: 'absolute',
           left:  `${((windowEnd - windowSize + 1) / (totalRows - 1)) * 100}%`,
-          right: `${((totalRows - 1 - windowEnd) / (totalRows - 1)) * 100}%`,
-          height: 4, background: 'var(--accent)', borderRadius: 2, opacity: 0.8, transition: 'left 0.08s, right 0.08s',
+          right: `${((totalRows - 1 - windowEnd)  / (totalRows - 1)) * 100}%`,
+          height: 6, background: 'var(--accent)', borderRadius: 3, opacity: 0.85,
         }} />
+        {/* Native range input — full hit area */}
         <input type="range" min={min} max={max} value={windowEnd} onChange={e => onChange(Number(e.target.value))}
-          style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, cursor: 'pointer', height: 24, margin: 0 }} />
+          style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, cursor: 'pointer', height: 36, margin: 0 }} />
+        {/* Thumb */}
         <div style={{
-          position: 'absolute', left: `calc(${((windowEnd - min) / (max - min)) * 100}% - 7px)`,
-          width: 14, height: 14, borderRadius: '50%',
-          background: 'var(--surface)', border: '2px solid var(--accent)',
-          boxShadow: '0 0 6px var(--accent-glow)', pointerEvents: 'none', transition: 'left 0.08s',
+          position: 'absolute', left: `calc(${((windowEnd - min) / (max - min)) * 100}% - 9px)`,
+          width: 18, height: 18, borderRadius: '50%',
+          background: 'var(--surface)', border: '2.5px solid var(--accent)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.15)', pointerEvents: 'none',
         }} />
+      </div>
+      <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.58rem', color: 'var(--muted)', marginTop: '0.35rem', textAlign: 'center' }}>
+        Drag slider or click dates above to type DD/MM
       </div>
     </div>
   )
@@ -433,9 +511,9 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:'0.6rem', marginBottom:'1.25rem' }}>
-        <StatCard label="Avg Spot Price" value={fmtP(summary.avgPrice)} sub="$/MWh" />
-        <StatCard label="Max Price" value={fmtP(summary.maxPrice)} sub="Peak" />
-        <StatCard label="Min Price" value={fmtP(summary.minPrice)} sub="Floor" />
+        <StatCard label="Avg Electricity Price" value={fmtP(summary.avgPrice)} sub="$/MWh" />
+        <StatCard label="Max Electricity Price" value={fmtP(summary.maxPrice)} sub="Peak" />
+        <StatCard label="Min Electricity Price" value={fmtP(summary.minPrice)} sub="Floor" />
         <StatCard label="Avg Generation" value={`${fmt(summary.avgTotalGen)} MW`} sub="All facilities" />
         <StatCard label="Peak Generation" value={`${fmt(summary.peakTotalGen)} MW`} sub="Max interval" />
       </div>
@@ -490,7 +568,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
                 fill={`url(#elecGrad${i})`} stackId="gen"
                 dot={false} activeDot={{ r:3, strokeWidth:0 }} connectNulls />
             ))}
-            <Line yAxisId="price" type="monotone" dataKey="price" name="Spot Price ($/MWh)"
+            <Line yAxisId="price" type="monotone" dataKey="price" name="Elec. Spot Price ($/MWh)"
               stroke={PRICE_COLOUR} strokeWidth={2} strokeDasharray="5 3"
               dot={false} activeDot={{ r:4, strokeWidth:0, fill: PRICE_COLOUR }} connectNulls />
           </ComposedChart>
@@ -506,6 +584,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
               lastLabel={rows.length > 0 ? fmtLabel(rows[rows.length-1].datetime) : ''}
               windowStartLabel={visibleRows.length > 0 ? fmtLabel(visibleRows[0].datetime) : ''}
               windowEndLabel={visibleRows.length > 0 ? fmtLabel(visibleRows[visibleRows.length-1].datetime) : ''}
+              allDates={rows.map((r: any) => r.datetime)}
             />
           )}
         </div>
@@ -537,7 +616,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
           <div style={{ maxHeight:320, overflowY:'auto', borderTop:'1px solid var(--border)' }}>
             <table className="sq-table">
               <thead><tr>
-                <th>Datetime</th><th>Price $/MWh</th>
+                <th>Datetime</th><th>Elec. Price $/MWh</th>
                 {facilities.map((f: string) => <th key={f}>{f}</th>)}
               </tr></thead>
               <tbody>
