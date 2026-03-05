@@ -20,12 +20,12 @@ const PRICE_COLOUR = '#C0334A'
 const FUEL_MIX_ORDER  = ['Coal','Gas','Wind','Solar','Battery','Imports'] as const
 type FuelCategory = typeof FUEL_MIX_ORDER[number]
 const FUEL_MIX_COLOURS: Record<FuelCategory, string> = {
-  Coal:    '#5C5240',   // dark warm brown
-  Gas:     '#1B5E7B',   // teal-blue (matches dashboard accent)
-  Wind:    '#2E7D4F',   // forest green
-  Solar:   '#B5880C',   // amber gold
-  Battery: '#7B3FA0',   // purple
-  Imports: '#C0334A',   // red
+  Coal:    '#6B6560',   // medium grey-brown — clearly "dirty"
+  Gas:     '#2196B0',   // bright teal-blue
+  Wind:    '#27AE60',   // vivid green
+  Solar:   '#F4A020',   // bright amber-orange
+  Battery: '#9B59B6',   // vivid purple
+  Imports: '#E74C3C',   // bright red
 }
 
 
@@ -346,18 +346,11 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
     return { latestGasPct: latestPct, maxGasPct: maxPct || null, latestDt: lastRow?.datetime ?? '' }
   }, [chartRows, present])
 
-  // Smart ticks for x-axis
-  const tickDates = useMemo(() => {
-    if (!chartRows.length) return []
-    const n = chartRows.length, target = 8
-    const step = Math.max(1, Math.floor(n / target))
-    const ticks: string[] = []
-    for (let i = 0; i < n; i += step) ticks.push(chartRows[i].datetime)
-    if (ticks[ticks.length-1] !== chartRows[n-1].datetime) ticks.push(chartRows[n-1].datetime)
-    return ticks
-  }, [chartRows])
-
-  const tickFmt = (v: string) => { const [,mm,dd] = v.split(' ')[0].split('-'); return `${dd}/${mm}` }
+  // Reuse the same smart tick logic as the GPG generation chart
+  const { ticks: tickDates, formatter: tickFmt } = useMemo(
+    () => elecSmartTicks(chartRows, dateRange),
+    [chartRows, dateRange]
+  )
 
   if (!dates.length || !present.length) return null
 
@@ -417,7 +410,8 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
           <XAxis dataKey="datetime"
             ticks={tickDates} tickFormatter={tickFmt}
             tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-            tickLine={false} axisLine={{ stroke:'var(--border)' }} />
+            tickLine={false} axisLine={{ stroke:'var(--border)' }}
+            interval="preserveStartEnd" />
           <YAxis tickFormatter={v => `${v}%`} domain={[0, 100]}
             tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
             tickLine={false} axisLine={false} width={38} />
