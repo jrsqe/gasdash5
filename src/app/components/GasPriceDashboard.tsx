@@ -8,13 +8,13 @@ import {
 import type { DwgmDay, SttmDay, SttmHub } from '@/lib/gasPriceData'
 
 // ── Colours ───────────────────────────────────────────────────────────────────
-const DWGM_COLOUR  = '#1B5E7B'   // teal-blue for DWGM weighted avg
-const BOD_COLOUR   = '#5590B8'   // scheduled prices — readable but distinct from weighted avg
-const HILIGHT_CLR  = '#C0334A'   // red reference line for GBB most-recent date
+const DWGM_COLOUR  = '#0071E3'   // Apple blue for DWGM weighted avg
+const BOD_COLOUR   = '#5AC8FA'   // Apple light blue — scheduled prices
+const HILIGHT_CLR  = '#FF375F'   // Apple red — GBB most-recent date
 const STTM_HUB_COLOURS: Record<SttmHub, string> = {
-  SYD: '#8B6914',   // amber
-  BRI: '#E4830A',   // orange (QLD colour)
-  ADE: '#8B3FA8',   // purple (SA colour)
+  SYD: '#FF9F0A',   // Apple amber — Sydney
+  BRI: '#FF6B35',   // vivid orange — Brisbane
+  ADE: '#AF52DE',   // Apple purple — Adelaide
 }
 const STTM_HUB_LABELS: Record<SttmHub, string> = {
   SYD: 'Sydney',

@@ -300,7 +300,7 @@ export default function GpgProfileDashboard() {
         <div style={{ display:'flex' }}>
           {(['NSW','VIC','QLD','SA'] as const).map(r => {
             const isActive = r === region
-            const RCOL: Record<string,string> = { NSW:'#1B5E7B', VIC:'#2A6E44', QLD:'#E4830A', SA:'#8B3FA8' }
+            const RCOL: Record<string,string> = { NSW:'#0071E3', VIC:'#30C254', QLD:'#FF9F0A', SA:'#AF52DE' }
             const RLAB: Record<string,string> = { NSW:'New South Wales', VIC:'Victoria', QLD:'Queensland', SA:'South Australia' }
             const colour = RCOL[r]
             return (

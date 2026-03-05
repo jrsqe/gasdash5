@@ -15,17 +15,17 @@ const FACILITY_COLOURS = [
   '#C0334A','#1A6B6B','#5C5FA8','#7A4F1E','#3D8B37',
   '#A0522D','#4A7FA5','#8B6914','#5D4E6D','#2D6E6E',
 ]
-const PRICE_COLOUR = '#C0334A'
+const PRICE_COLOUR = '#FF375F'
 
 const FUEL_MIX_ORDER  = ['Coal','Gas','Wind','Solar','Battery','Imports'] as const
 type FuelCategory = typeof FUEL_MIX_ORDER[number]
 const FUEL_MIX_COLOURS: Record<FuelCategory, string> = {
-  Coal:    '#6B6560',   // medium grey-brown — clearly "dirty"
-  Gas:     '#2196B0',   // bright teal-blue
-  Wind:    '#27AE60',   // vivid green
-  Solar:   '#F4A020',   // bright amber-orange
-  Battery: '#9B59B6',   // vivid purple
-  Imports: '#E74C3C',   // bright red
+  Coal:    '#8E8E93',   // Apple grey — neutral "dirty"
+  Gas:     '#0071E3',   // Apple blue
+  Wind:    '#30C254',   // Apple green
+  Solar:   '#FF9F0A',   // Apple amber
+  Battery: '#AF52DE',   // Apple purple
+  Imports: '#FF375F',   // Apple red
 }
 
 
@@ -492,7 +492,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
     { value:'3d', label:'3d' }, { value:'1d', label:'1d' },
   ]
 
-  const REGION_COLOURS: Record<string,string> = { NSW:'#7B9FF9', VIC:'#1B5E7B', QLD:'#E4830A', SA:'#8B3FA8' }
+  const REGION_COLOURS: Record<string,string> = { NSW:'#0071E3', VIC:'#30C254', QLD:'#FF9F0A', SA:'#AF52DE' }
   const regionColour = REGION_COLOURS[region] ?? 'var(--accent)'
 
   return (
@@ -676,7 +676,7 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
         <div style={{ display:'flex' }}>
           {(['NSW','VIC','QLD','SA'] as const).map(tab => {
             const isActive = activeTab === tab
-            const TCOL: Record<string,string> = { NSW:'#7B9FF9', VIC:'#1B5E7B', QLD:'#E4830A', SA:'#8B3FA8' }
+            const TCOL: Record<string,string> = { NSW:'#0071E3', VIC:'#30C254', QLD:'#FF9F0A', SA:'#AF52DE' }
             const TLAB: Record<string,string> = { NSW:'New South Wales', VIC:'Victoria', QLD:'Queensland', SA:'South Australia' }
             const colour = TCOL[tab]
             return (

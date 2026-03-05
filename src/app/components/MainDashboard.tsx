@@ -72,47 +72,49 @@ export default function MainDashboard() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      {/* Header */}
+      {/* Header — Apple-style frosted sticky bar */}
       <header style={{
-        background: 'var(--surface)',
+        background: 'rgba(255,255,255,0.85)',
+        backdropFilter: 'saturate(180%) blur(20px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
         borderBottom: '1px solid var(--border)',
-        boxShadow: '0 1px 4px rgba(13,27,42,0.06)',
         position: 'sticky', top: 0, zIndex: 100,
-        padding: '0 1.75rem',
+        padding: '0 2rem',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        height: 56,
+        height: 52,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {/* Squadron logomark */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
           <div style={{
-            width: 32, height: 32, borderRadius: 6,
-            background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent) 100%)',
+            width: 30, height: 30, borderRadius: 8,
+            background: 'var(--accent)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 800, fontSize: '0.75rem', color: 'var(--surface)',
-            fontFamily: 'var(--font-ui)', letterSpacing: '-0.03em', flexShrink: 0,
+            fontWeight: 800, fontSize: '0.7rem', color: '#fff',
+            fontFamily: 'var(--font-ui)', letterSpacing: '-0.02em', flexShrink: 0,
           }}>SQ</div>
           <div>
-            <div style={{ color: 'var(--text)', fontWeight: 700, fontSize: '0.9rem', letterSpacing: '-0.01em', lineHeight: 1.15 }}>
+            <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: '0.88rem', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
               Gas Dashboard
             </div>
-            <div style={{ color: 'var(--muted)', fontSize: '0.62rem', fontFamily: 'var(--font-data)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            <div style={{ color: 'var(--muted)', fontSize: '0.6rem', fontFamily: 'var(--font-data)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
               Squadron Energy
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px var(--accent)' }} />
-          <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#30C254' }} />
+          <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--muted)', letterSpacing: '0.04em' }}>
             NEM Live
           </span>
         </div>
       </header>
 
-      {/* Top-level tabs */}
+      {/* Top-level tabs — pill-style */}
       <div style={{
-        background: 'var(--surface)',
+        background: 'rgba(255,255,255,0.85)',
+        backdropFilter: 'saturate(180%) blur(20px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
         borderBottom: '1px solid var(--border)',
-        padding: '0 1.75rem',
+        padding: '0 2rem',
         display: 'flex', gap: 0,
       }}>
         {([
@@ -124,10 +126,10 @@ export default function MainDashboard() {
           const isActive = tab === key
           return (
             <button key={key} onClick={() => setTab(key)} style={{
-              padding: '0.8rem 1.5rem',
+              padding: '0.75rem 1.25rem',
               border: 'none', background: 'transparent', cursor: 'pointer',
               fontFamily: 'var(--font-ui)', fontWeight: isActive ? 600 : 400,
-              fontSize: '0.82rem', letterSpacing: '-0.01em',
+              fontSize: '0.82rem', letterSpacing: '-0.015em',
               color: isActive ? 'var(--accent)' : 'var(--muted)',
               borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
               marginBottom: -1, transition: 'color 0.15s, border-color 0.15s',

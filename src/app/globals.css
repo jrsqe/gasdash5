@@ -1,61 +1,64 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* ── Core palette — clean light background ── */
-  --bg:          #F5F4F1;
+  /* ── Apple-inspired palette ── */
+  --bg:          #F5F5F7;      /* Apple page background */
   --surface:     #FFFFFF;
-  --surface-2:   #F0EEE9;
-  --surface-3:   #E5E2DC;
+  --surface-2:   #F5F5F7;
+  --surface-3:   #E8E8ED;
 
-  --border:      #D4D0C8;
-  --border-2:    #B8B4A8;
+  --border:      #E0E0E5;      /* hairline borders */
+  --border-2:    #C7C7CC;
 
-  /* ── Brand accent ── */
-  --accent:      #1B5E7B;
-  --accent-2:    #2980A8;
+  /* ── Brand accent — Apple blue ── */
+  --accent:      #0071E3;
+  --accent-2:    #0A84FF;
+  --accent-glow: rgba(0,113,227,0.18);
 
-  /* ── Data colours — all high-contrast on white ── */
-  --d1:  #1B5E7B;   /* deep teal-blue */
-  --d2:  #C44E1A;   /* burnt orange — darker for legibility */
-  --d3:  #2A6E44;   /* forest green */
-  --d4:  #6B3190;   /* rich purple */
-  --d5:  #9A7008;   /* amber gold — darkened */
-  --d6:  #B02A3E;   /* deep rose */
-  --d7:  #156B6B;   /* dark teal */
-  --d8:  #4A4E9A;   /* slate blue */
-  --d9:  #6A4018;   /* warm brown */
-  --d10: #2E7A30;   /* mid green */
-  --d11: #8B4520;   /* sienna */
-  --d12: #3A6E94;   /* steel blue */
-  --d13: #7A5C10;   /* dark gold */
-  --d14: #4E3E60;   /* plum */
-  --d15: #246060;   /* deep cyan */
+  /* ── Data series — vivid, well-separated ── */
+  --d1:  #0071E3;   /* Apple blue */
+  --d2:  #FF6B35;   /* vivid orange */
+  --d3:  #30C254;   /* Apple green */
+  --d4:  #AF52DE;   /* Apple purple */
+  --d5:  #FFD60A;   /* Apple yellow */
+  --d6:  #FF375F;   /* Apple red/pink */
+  --d7:  #5AC8FA;   /* light blue */
+  --d8:  #FF9F0A;   /* Apple amber */
+  --d9:  #64D2FF;   /* sky blue */
+  --d10: #32D74B;   /* bright green */
+  --d11: #FF453A;   /* bright red */
+  --d12: #BF5AF2;   /* bright purple */
+  --d13: #AC8E68;   /* warm tan */
+  --d14: #6E6E73;   /* apple grey */
+  --d15: #2C9CF5;   /* mid blue */
 
   /* ── Semantic ── */
-  --price:    #B02A3E;
-  --positive: #2A6E44;
-  --negative: #B02A3E;
-  --neutral:  #9A7008;
+  --price:    #FF375F;
+  --positive: #30C254;
+  --negative: #FF375F;
+  --neutral:  #FF9F0A;
 
-  /* ── Text — all high contrast ── */
-  --text:     #111009;   /* near-black */
-  --text-2:   #2D2920;   /* secondary — still very dark */
-  --muted:    #5A5448;   /* muted — 4.5:1+ contrast on white */
-  --muted-2:  #847C70;   /* very muted — for non-critical labels only */
+  /* ── Text ── */
+  --text:     #1D1D1F;   /* Apple near-black */
+  --text-2:   #3A3A3C;
+  --muted:    #6E6E73;   /* Apple secondary label */
+  --muted-2:  #AEAEB2;   /* Apple tertiary label */
 
-  /* ── State colours ── */
-  --nsw:  #1B5E7B;
-  --vic:  #2A6E44;
-  --sa:   #C44E1A;
-  --qld:  #6B3190;
-  --tas:  #9A7008;
+  /* ── State colours — brighter ── */
+  --nsw:  #0071E3;   /* blue */
+  --vic:  #30C254;   /* green */
+  --sa:   #AF52DE;   /* purple */
+  --qld:  #FF9F0A;   /* amber */
+  --tas:  #5AC8FA;   /* light blue */
 
-  --font-ui:   'IBM Plex Sans', sans-serif;
-  --font-data: 'IBM Plex Mono', monospace;
-  --radius:    8px;
-  --radius-sm: 5px;
+  --font-ui:   'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-data: 'JetBrains Mono', 'SF Mono', monospace;
+  --radius:    12px;
+  --radius-sm: 8px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow:    0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
 }
 
 html, body {
@@ -63,25 +66,20 @@ html, body {
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
   font-size: 14px;
   line-height: 1.5;
 }
 
-/* Card with subtle top accent bar */
+/* Card — clean white with subtle shadow, no top bar */
 .sq-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
   position: relative;
   overflow: hidden;
-}
-.sq-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 60%, transparent 100%);
 }
 
 /* Stat card */
@@ -89,53 +87,54 @@ html, body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1.1rem;
+  box-shadow: var(--shadow-sm);
 }
 .sq-stat-label {
   font-family: var(--font-data);
-  font-size: 0.6rem;
+  font-size: 0.58rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.35rem;
 }
 .sq-stat-value {
   font-family: var(--font-data);
-  font-size: 1.25rem;
+  font-size: 1.3rem;
   font-weight: 700;
   color: var(--text);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   line-height: 1.1;
 }
 .sq-stat-sub {
   font-family: var(--font-data);
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   color: var(--muted);
   margin-top: 0.3rem;
 }
 
 /* Data table */
 .sq-table { width: 100%; border-collapse: collapse; font-family: var(--font-data); font-size: 0.76rem; }
-.sq-table thead tr { border-bottom: 2px solid var(--border); }
+.sq-table thead tr { border-bottom: 1px solid var(--border); }
 .sq-table th {
-  text-align: left; padding: 0.5rem 0.75rem;
+  text-align: left; padding: 0.55rem 0.85rem;
   color: var(--muted); font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.6rem;
+  text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.58rem;
 }
-.sq-table td { padding: 0.45rem 0.75rem; color: var(--text); border-bottom: 1px solid var(--border); }
+.sq-table td { padding: 0.45rem 0.85rem; color: var(--text); border-bottom: 1px solid var(--border); }
 .sq-table tbody tr:hover { background: var(--surface-2); }
 .sq-table tbody tr:last-child td { border-bottom: none; }
 
 /* Scrollbars */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
 
 input[type=range] { accent-color: var(--accent); }
 
-/* Chart legend fix — prevent overlap with x-axis labels */
+/* Recharts legend fix */
 .recharts-legend-wrapper {
   position: relative !important;
   bottom: auto !important;

@@ -9,15 +9,15 @@ import { useGbbData } from './MainDashboard'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const PALETTE = [
-  '#1B5E7B','#E8632A','#2E7D4F','#7B3FA0','#B5880C',
-  '#C0334A','#1A6B6B','#5C5FA8','#7A4F1E','#3D8B37',
+  '#0071E3','#E8632A','#30C254','#AF52DE','#FF9F0A',
+  '#FF375F','#5AC8FA','#64D2FF','#7A4F1E','#3D8B37',
   '#A0522D','#4A7FA5','#8B6914','#5D4E6D','#2D6E6E',
 ]
 const PIPE_COLOURS: Record<string,string> = {
-  EGP:'#1B5E7B', MSP:'#2E7D4F', MAPS:'#E8632A', CGP:'#7B3FA0', SWQP:'#B5880C',
-  QGP:'#1A6B6B', RBP:'#5C5FA8', 'VTS-LMP':'#C0334A', 'VTS-SWP':'#7A4F1E', 'VTS-VNI':'#3D8B37',
+  EGP:'#0071E3', MSP:'#30C254', MAPS:'#E8632A', CGP:'#AF52DE', SWQP:'#FF9F0A',
+  QGP:'#5AC8FA', RBP:'#64D2FF', 'VTS-LMP':'#FF375F', 'VTS-SWP':'#7A4F1E', 'VTS-VNI':'#3D8B37',
   TGP:'#4A7FA5', PCA:'#8B6914',
-  GLNG:'#C0334A', APLNG:'#2D6E6E', WGP:'#7A4F1E',
+  GLNG:'#FF375F', APLNG:'#2D6E6E', WGP:'#7A4F1E',
 }
 const STATE_COLOURS: Record<string,string> = { NSW:'var(--nsw)', VIC:'var(--vic)', SA:'var(--sa)', QLD:'var(--qld)', TAS:'var(--tas)' }
 
