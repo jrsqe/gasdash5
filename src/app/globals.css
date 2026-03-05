@@ -3,55 +3,54 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* ── Core palette ── */
-  --bg:          #F8F7F4;   /* warm off-white — easier on eyes than pure white */
+  /* ── Core palette — clean light background ── */
+  --bg:          #F5F4F1;
   --surface:     #FFFFFF;
-  --surface-2:   #F2F1EE;
-  --surface-3:   #E8E6E1;
+  --surface-2:   #F0EEE9;
+  --surface-3:   #E5E2DC;
 
-  --border:      #DDD9D0;
-  --border-2:    #C8C3B8;
+  --border:      #D4D0C8;
+  --border-2:    #B8B4A8;
 
-  /* ── Brand accent — deep teal-blue, authoritative ── */
-  --accent:      #1B5E7B;   /* primary action / active states */
-  --accent-2:    #2980A8;   /* lighter accent */
-  --accent-glow: rgba(27,94,123,0.10);
+  /* ── Brand accent ── */
+  --accent:      #1B5E7B;
+  --accent-2:    #2980A8;
 
-  /* ── Data colours — distinct, readable on white, inspired by FT/Bloomberg ── */
+  /* ── Data colours — all high-contrast on white ── */
   --d1:  #1B5E7B;   /* deep teal-blue */
-  --d2:  #E8632A;   /* burnt orange */
-  --d3:  #2E7D4F;   /* forest green */
-  --d4:  #7B3FA0;   /* rich purple */
-  --d5:  #B5880C;   /* amber gold */
-  --d6:  #C0334A;   /* deep rose */
-  --d7:  #1A6B6B;   /* dark teal */
-  --d8:  #5C5FA8;   /* slate blue */
-  --d9:  #7A4F1E;   /* warm brown */
-  --d10: #3D8B37;   /* mid green */
-  --d11: #A0522D;   /* sienna */
-  --d12: #4A7FA5;   /* steel blue */
-  --d13: #8B6914;   /* dark gold */
-  --d14: #5D4E6D;   /* plum */
-  --d15: #2D6E6E;   /* deep cyan */
+  --d2:  #C44E1A;   /* burnt orange — darker for legibility */
+  --d3:  #2A6E44;   /* forest green */
+  --d4:  #6B3190;   /* rich purple */
+  --d5:  #9A7008;   /* amber gold — darkened */
+  --d6:  #B02A3E;   /* deep rose */
+  --d7:  #156B6B;   /* dark teal */
+  --d8:  #4A4E9A;   /* slate blue */
+  --d9:  #6A4018;   /* warm brown */
+  --d10: #2E7A30;   /* mid green */
+  --d11: #8B4520;   /* sienna */
+  --d12: #3A6E94;   /* steel blue */
+  --d13: #7A5C10;   /* dark gold */
+  --d14: #4E3E60;   /* plum */
+  --d15: #246060;   /* deep cyan */
 
   /* ── Semantic ── */
-  --price:    #C0334A;   /* spot price line — distinct red */
-  --positive: #2E7D4F;
-  --negative: #C0334A;
-  --neutral:  #B5880C;
+  --price:    #B02A3E;
+  --positive: #2A6E44;
+  --negative: #B02A3E;
+  --neutral:  #9A7008;
 
-  /* ── Text ── */
-  --text:     #1A1814;   /* near-black, warm */
-  --text-2:   #3D3830;   /* secondary */
-  --muted:    #7A7060;   /* muted labels */
-  --muted-2:  #A09880;   /* very muted */
+  /* ── Text — all high contrast ── */
+  --text:     #111009;   /* near-black */
+  --text-2:   #2D2920;   /* secondary — still very dark */
+  --muted:    #5A5448;   /* muted — 4.5:1+ contrast on white */
+  --muted-2:  #847C70;   /* very muted — for non-critical labels only */
 
   /* ── State colours ── */
   --nsw:  #1B5E7B;
-  --vic:  #2E7D4F;
-  --sa:   #E8632A;
-  --qld:  #7B3FA0;
-  --tas:  #B5880C;
+  --vic:  #2A6E44;
+  --sa:   #C44E1A;
+  --qld:  #6B3190;
+  --tas:  #9A7008;
 
   --font-ui:   'IBM Plex Sans', sans-serif;
   --font-data: 'IBM Plex Mono', monospace;
@@ -69,6 +68,7 @@ html, body {
   line-height: 1.5;
 }
 
+/* Card with subtle top accent bar */
 .sq-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -81,47 +81,62 @@ html, body {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 50%, transparent 100%);
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 60%, transparent 100%);
 }
 
+/* Stat card */
 .sq-stat {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 0.85rem 1.1rem;
-  transition: border-color 0.2s;
+  padding: 0.75rem 1rem;
 }
-.sq-stat:hover { border-color: var(--accent); }
 .sq-stat-label {
   font-family: var(--font-data);
-  font-size: 0.58rem; font-weight: 500;
-  letter-spacing: 0.09em; text-transform: uppercase;
-  color: var(--muted); margin-bottom: 0.3rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
 }
 .sq-stat-value {
   font-family: var(--font-data);
-  font-size: 1.3rem; font-weight: 600;
-  color: var(--text); letter-spacing: -0.02em; line-height: 1;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 .sq-stat-sub {
   font-family: var(--font-data);
-  font-size: 0.62rem; color: var(--muted); margin-top: 0.25rem;
+  font-size: 0.62rem;
+  color: var(--muted);
+  margin-top: 0.3rem;
 }
 
+/* Data table */
 .sq-table { width: 100%; border-collapse: collapse; font-family: var(--font-data); font-size: 0.76rem; }
 .sq-table thead tr { border-bottom: 2px solid var(--border); }
 .sq-table th {
-  text-align: left; padding: 0.45rem 0.75rem;
-  color: var(--muted); font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.58rem;
+  text-align: left; padding: 0.5rem 0.75rem;
+  color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.6rem;
 }
 .sq-table td { padding: 0.45rem 0.75rem; color: var(--text); border-bottom: 1px solid var(--border); }
 .sq-table tbody tr:hover { background: var(--surface-2); }
 .sq-table tbody tr:last-child td { border-bottom: none; }
 
+/* Scrollbars */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
 
 input[type=range] { accent-color: var(--accent); }
+
+/* Chart legend fix — prevent overlap with x-axis labels */
+.recharts-legend-wrapper {
+  position: relative !important;
+  bottom: auto !important;
+}

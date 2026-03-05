@@ -271,7 +271,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
           <CsvButton onClick={() => downloadCsv(visibleRows.map((r: any) => ({ datetime: r.datetime, price: r.price, ...Object.fromEntries(facilities.map((f: string) => [f, r[f]])) })), `generation-${region}.csv`)} />
         </div>
         <ResponsiveContainer width="100%" height={320}>
-          <ComposedChart data={chartRows} margin={{ top:5, right:20, left:0, bottom:5 }}>
+          <ComposedChart data={chartRows} margin={{ top:8, right:20, left:0, bottom:8 }}>
             <defs>
               {facilities.map((name: string, i: number) => (
                 <linearGradient key={name} id={`elecGrad${i}`} x1="0" y1="0" x2="0" y2="1">
@@ -284,16 +284,16 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
             <XAxis dataKey="datetime"
               ticks={elecSmartTicks(chartRows, dateRange).ticks}
               tickFormatter={elecSmartTicks(chartRows, dateRange).formatter}
-              tick={{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' }}
+              tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={{ stroke:'var(--border)' }} interval="preserveStartEnd" />
             <YAxis yAxisId="gen"
-              tick={{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' }}
+              tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={false} width={54} tickFormatter={v => `${v} MW`} />
             <YAxis yAxisId="price" orientation="right"
               tick={{ fill: PRICE_COLOUR, fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={false} width={62} tickFormatter={v => `$${v}`} />
             <Tooltip content={<SqTooltip />} />
-            <Legend wrapperStyle={{ fontSize:'0.65rem', fontFamily:'var(--font-data)', paddingTop:'0.5rem', color:'var(--text-2)' }} />
+            <Legend wrapperStyle={{ fontSize:'0.68rem', fontFamily:'var(--font-data)', color:'#333', paddingTop:'0.5rem' }} />
             {facilities.map((name: string, i: number) => (
               <Area key={name} yAxisId="gen" type="monotone" dataKey={name}
                 stroke={FACILITY_COLOURS[i % FACILITY_COLOURS.length]} strokeWidth={0}

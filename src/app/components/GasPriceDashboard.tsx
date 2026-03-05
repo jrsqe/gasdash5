@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
-  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
+  ComposedChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine, Area
 } from 'recharts'
 import type { DwgmDay, SttmDay } from '@/lib/gasPriceData'
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 const DWGM_COLOUR  = '#1B5E7B'   // teal-blue for DWGM weighted avg
-const BOD_COLOUR   = '#7AAED0'   // lighter for scheduled prices
+const BOD_COLOUR   = '#5590B8'   // scheduled prices — readable but distinct from weighted avg
 const STTM_COLOUR  = '#8B6914'   // amber for STTM Sydney
 const HILIGHT_CLR  = '#C0334A'   // red reference line for GBB most-recent date
 
@@ -51,14 +51,14 @@ function PriceTooltip({ active, payload, label, unit = '$/GJ' }: any) {
       fontFamily: 'var(--font-data)', fontSize: '0.72rem',
       boxShadow: '0 4px 16px rgba(0,0,0,0.08)', minWidth: 160,
     }}>
-      <div style={{ fontWeight: 700, color: 'var(--text)', marginBottom: '0.4rem' }}>{label}</div>
+      <div style={{ fontWeight: 700, color: '#111009', marginBottom: '0.4rem' }}>{label}</div>
       {payload.map((p: any) => p.value != null && (
         <div key={p.dataKey} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: 2 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <div style={{ width: 8, height: 8, borderRadius: 2, background: p.color, flexShrink: 0 }} />
-            <span style={{ color: 'var(--text-2)' }}>{p.name}</span>
+            <span style={{ color: '#2D2920' }}>{p.name}</span>
           </span>
-          <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+          <span style={{ fontWeight: 600, color: '#111009' }}>
             ${p.value.toFixed(4)} {unit}
           </span>
         </div>
@@ -103,10 +103,10 @@ function DwgmPanel({ dwgm, gbbDate }: { dwgm: DwgmDay[]; gbbDate: string }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', marginBottom: '0.85rem' }}>
-        <h3 style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>
+        <h3 style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: '#111009' }}>
           DWGM — Victorian Declared Wholesale Gas Market
         </h3>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)' }}>
+        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: '#5A5448' }}>
           $/GJ · GST exclusive
         </span>
       </div>
@@ -142,17 +142,17 @@ function DwgmPanel({ dwgm, gbbDate }: { dwgm: DwgmDay[]; gbbDate: string }) {
 
       {/* Chart */}
       <ResponsiveContainer width="100%" height={280}>
-        <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+        <ComposedChart data={chartData} margin={{ top: 40, right: 16, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="label"
-            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: 'var(--muted)' }}
+            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#5A5448' }}
             tickLine={false} axisLine={{ stroke: 'var(--border)' }} />
           <YAxis domain={[minP, maxP]}
-            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: 'var(--muted)' }}
+            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#5A5448' }}
             tickLine={false} axisLine={false} width={52}
             tickFormatter={v => `$${v}`} />
           <Tooltip content={<PriceTooltip />} />
-          <Legend wrapperStyle={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', paddingTop: '0.4rem' }} />
+          <Legend verticalAlign="top" align="left" wrapperStyle={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: '#2D2920', paddingBottom: '0.5rem' }} />
 
           {/* Scheduled price dots */}
           <Line dataKey="BOD"  type="monotone" stroke={BOD_COLOUR} strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="BOD" />
@@ -192,10 +192,10 @@ function SttmPanel({ sttm, gbbDate }: { sttm: SttmDay[]; gbbDate: string }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', marginBottom: '0.85rem' }}>
-        <h3 style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>
+        <h3 style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: '#111009' }}>
           STTM — Sydney Hub
         </h3>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)' }}>
+        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: '#5A5448' }}>
           Ex-post imbalance price · $/GJ · GST exclusive
         </span>
       </div>
@@ -217,93 +217,25 @@ function SttmPanel({ sttm, gbbDate }: { sttm: SttmDay[]; gbbDate: string }) {
             colour={HILIGHT_CLR}
           />
         )}
-        {latest && gbbRow && (
-          <StatCard
-            label="Spread (Sydney – DWGM)"
-            value="—"
-            sub="See DWGM panel above"
-            colour="var(--muted)"
-          />
-        )}
+
       </div>
 
       <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+        <ComposedChart data={chartData} margin={{ top: 40, right: 16, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="label"
-            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: 'var(--muted)' }}
+            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#5A5448' }}
             tickLine={false} axisLine={{ stroke: 'var(--border)' }} />
           <YAxis domain={[minP, maxP]}
-            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: 'var(--muted)' }}
+            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#5A5448' }}
             tickLine={false} axisLine={false} width={52}
             tickFormatter={v => `$${v}`} />
           <Tooltip content={<PriceTooltip />} />
-          <Legend wrapperStyle={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', paddingTop: '0.4rem' }} />
+          <Legend verticalAlign="top" align="left" wrapperStyle={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: '#2D2920', paddingBottom: '0.5rem' }} />
           <Area dataKey="Ex-Post Price" type="monotone"
             stroke={STTM_COLOUR} strokeWidth={2.5}
             fill={STTM_COLOUR} fillOpacity={0.12}
             dot={{ r: 4, fill: STTM_COLOUR }} name="Ex-Post Price" />
-          {gbbRow && (
-            <ReferenceLine x={gbbRow.label} stroke={HILIGHT_CLR} strokeWidth={2} strokeDasharray="4 2"
-              label={{ value: 'GBB', position: 'top', fontSize: 9, fill: HILIGHT_CLR, fontFamily: 'var(--font-data)' }} />
-          )}
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-// ── Spread Panel ──────────────────────────────────────────────────────────────
-function SpreadPanel({ dwgm, sttm, gbbDate }: { dwgm: DwgmDay[]; sttm: SttmDay[]; gbbDate: string }) {
-  // Join on gasDate
-  const joined = dwgm.flatMap(d => {
-    const s = sttm.find(s => s.gasDate === d.gasDate)
-    if (!s || d.wdAvg == null || s.price == null) return []
-    return [{ label: d.label, gasDate: d.gasDate, spread: parseFloat((s.price - d.wdAvg).toFixed(4)) }]
-  })
-  if (joined.length < 2) return null
-
-  const gbbRow = joined.find(r => r.gasDate === gbbDate)
-  const spreads = joined.map(r => r.spread)
-  const minS = Math.min(...spreads)
-  const maxS = Math.max(...spreads)
-  const pad  = Math.max(0.5, (maxS - minS) * 0.2)
-
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', marginBottom: '0.85rem' }}>
-        <h3 style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>
-          Sydney–DWGM Spread
-        </h3>
-        <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)' }}>
-          STTM Sydney minus DWGM weighted average · $/GJ
-        </span>
-      </div>
-      {gbbRow && (
-        <div style={{ marginBottom: '0.75rem' }}>
-          <StatCard
-            label={`GBB date spread (${gbbRow.label})`}
-            value={`${gbbRow.spread >= 0 ? '+' : ''}$${gbbRow.spread.toFixed(4)}`}
-            sub="Sydney premium over DWGM"
-            colour={gbbRow.spread >= 0 ? STTM_COLOUR : DWGM_COLOUR}
-          />
-        </div>
-      )}
-      <ResponsiveContainer width="100%" height={200}>
-        <ComposedChart data={joined} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="label"
-            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: 'var(--muted)' }}
-            tickLine={false} axisLine={{ stroke: 'var(--border)' }} />
-          <YAxis domain={[minS - pad, maxS + pad]}
-            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: 'var(--muted)' }}
-            tickLine={false} axisLine={false} width={52}
-            tickFormatter={v => `$${v.toFixed(2)}`} />
-          <Tooltip content={<PriceTooltip unit="$/GJ spread" />} />
-          <ReferenceLine y={0} stroke="var(--border)" strokeWidth={1.5} />
-          <Bar dataKey="spread" name="Spread"
-            fill={STTM_COLOUR} fillOpacity={0.7}
-            radius={[2, 2, 0, 0]} />
           {gbbRow && (
             <ReferenceLine x={gbbRow.label} stroke={HILIGHT_CLR} strokeWidth={2} strokeDasharray="4 2"
               label={{ value: 'GBB', position: 'top', fontSize: 9, fill: HILIGHT_CLR, fontFamily: 'var(--font-data)' }} />
@@ -348,14 +280,14 @@ export default function GasPriceDashboard({ gbbMostRecentDate }: { gbbMostRecent
         padding: '0.6rem 1.75rem', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap',
       }}>
-        <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)' }}>
-          {effectiveGbbDate && <>GBB most recent gas date: <strong style={{ color: 'var(--text)' }}>
+        <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: '#5A5448' }}>
+          {effectiveGbbDate && <>GBB most recent gas date: <strong style={{ color: '#111009' }}>
             {dwgm.find(d => d.gasDate === effectiveGbbDate)?.label ?? effectiveGbbDate}
           </strong> — highlighted with red dashed line</>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {lastFetched && (
-            <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--muted)' }}>
+            <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: '#5A5448' }}>
               Updated {lastFetched}
             </span>
           )}
@@ -363,18 +295,18 @@ export default function GasPriceDashboard({ gbbMostRecentDate }: { gbbMostRecent
             padding: '0.3rem 0.75rem', border: '1px solid var(--border)',
             borderRadius: 'var(--radius-sm)', background: 'transparent',
             cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: 'var(--font-ui)', fontSize: '0.72rem', color: 'var(--muted)',
+            fontFamily: 'var(--font-ui)', fontSize: '0.72rem', color: '#5A5448',
           }}>{loading ? 'Loading…' : 'Refresh'}</button>
         </div>
       </div>
 
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: '1.5rem' }}>
         {error ? (
-          <div style={{ color: 'var(--negative)', fontFamily: 'var(--font-data)', fontSize: '0.75rem' }}>
+          <div style={{ color: '#B02A3E', fontFamily: 'var(--font-data)', fontSize: '0.75rem' }}>
             Error loading price data: {error}
           </div>
         ) : loading && !data ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--muted)', fontFamily: 'var(--font-data)', fontSize: '0.75rem' }}>
+          <div style={{ padding: '3rem', textAlign: 'center', color: '#5A5448', fontFamily: 'var(--font-data)', fontSize: '0.75rem' }}>
             Fetching gas price data…
           </div>
         ) : (
@@ -385,12 +317,8 @@ export default function GasPriceDashboard({ gbbMostRecentDate }: { gbbMostRecent
             <div className="sq-card" style={{ padding: '1.5rem' }}>
               <SttmPanel sttm={sttmSyd} gbbDate={effectiveGbbDate} />
             </div>
-            {dwgm.length > 0 && sttmSyd.length > 0 && (
-              <div className="sq-card" style={{ padding: '1.5rem' }}>
-                <SpreadPanel dwgm={dwgm} sttm={sttmSyd} gbbDate={effectiveGbbDate} />
-              </div>
-            )}
-            <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)' }}>
+
+            <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: '#5A5448' }}>
               DWGM: {dwgm[0]?.label} – {dwgm[dwgm.length-1]?.label} ({dwgm.length} days) ·
               STTM Sydney: {sttmSyd[0]?.label} – {sttmSyd[sttmSyd.length-1]?.label} ({sttmSyd.length} days)
             </div>

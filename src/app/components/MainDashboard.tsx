@@ -93,7 +93,7 @@ export default function MainDashboard() {
           }}>SQ</div>
           <div>
             <div style={{ color: 'var(--text)', fontWeight: 700, fontSize: '0.9rem', letterSpacing: '-0.01em', lineHeight: 1.15 }}>
-              Energy Intelligence
+              Gas Dashboard
             </div>
             <div style={{ color: 'var(--muted)', fontSize: '0.62rem', fontFamily: 'var(--font-data)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
               Squadron Energy
