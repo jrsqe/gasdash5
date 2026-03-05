@@ -344,7 +344,7 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
     const lastRow  = chartRows[chartRows.length - 1]
     const latestPct = lastRow?.['Gas'] ?? null
     return { latestGasPct: latestPct, maxGasPct: maxPct || null, latestDt: lastRow?.datetime ?? '' }
-  }, [chartRows, present])''
+  }, [chartRows, present])
 
   // Smart ticks for x-axis
   const tickDates = useMemo(() => {
