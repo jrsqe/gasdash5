@@ -6,8 +6,9 @@ import dynamic from 'next/dynamic'
 const ElectricityDashboard  = dynamic(() => import('./DashboardClient'),       { ssr: false })
 const GbbDashboard          = dynamic(() => import('./GbbDashboard'),          { ssr: false })
 const GpgProfileDashboard   = dynamic(() => import('./GpgProfileDashboard'),   { ssr: false })
+const GasPriceDashboard     = dynamic(() => import('./GasPriceDashboard'),     { ssr: false })
 
-type TopTab = 'electricity' | 'gas' | 'gpg-profile'
+type TopTab = 'electricity' | 'gas' | 'gpg-profile' | 'gas-prices'
 
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 
@@ -118,6 +119,7 @@ export default function MainDashboard() {
           { key: 'electricity', label: 'Gas Power Generation' },
           { key: 'gas',         label: 'Gas Market (GBB)' },
           { key: 'gpg-profile', label: 'GPG Generation Profile' },
+          { key: 'gas-prices',  label: 'Gas Prices' },
         ] as { key: TopTab; label: string }[]).map(({ key, label }) => {
           const isActive = tab === key
           return (
@@ -138,6 +140,9 @@ export default function MainDashboard() {
       <div style={{ display: tab === 'electricity' ? 'block' : 'none' }}>
         <ElectricityDashboard hideHeader />
       </div>
+      <div style={{ display: tab === 'gas-prices' ? 'block' : 'none' }}>
+        <GasPriceDashboard />
+      </div>
       <div style={{ display: tab === 'gpg-profile' ? 'block' : 'none' }}>
         <GpgProfileDashboard />
       </div>
@@ -154,7 +159,7 @@ export default function MainDashboard() {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)' }}>
-          {tab === 'gas' ? 'AEMO Gas Bulletin Board · nemweb.com.au' : 'Open Electricity API · openelectricity.org.au'}
+          {tab === 'gas' ? 'AEMO Gas Bulletin Board · nemweb.com.au' : tab === 'gas-prices' ? 'AEMO DWGM · STTM · nemweb.com.au' : 'Open Electricity API · openelectricity.org.au'}
         </span>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)', letterSpacing: '0.04em' }}>
           Data refreshes hourly
