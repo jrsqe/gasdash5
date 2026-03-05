@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, ReferenceLine, Area
+  Tooltip, ResponsiveContainer, ReferenceLine, Area
 } from 'recharts'
 import type { DwgmDay, SttmDay } from '@/lib/gasPriceData'
 
@@ -140,19 +140,37 @@ function DwgmPanel({ dwgm, gbbDate }: { dwgm: DwgmDay[]; gbbDate: string }) {
         )}
       </div>
 
+      {/* HTML legend — in normal doc flow, never overlaps */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem 1rem', padding:'0.5rem 0', marginBottom:'0.5rem', borderBottom:'1px solid var(--border)' }}>
+        {([
+          { label:'Wtd Avg', colour: DWGM_COLOUR, dash: false },
+          { label:'BOD',     colour: BOD_COLOUR,  dash: true  },
+          { label:'10am',    colour: BOD_COLOUR,  dash: true  },
+          { label:'2pm',     colour: BOD_COLOUR,  dash: true  },
+          { label:'6pm',     colour: BOD_COLOUR,  dash: true  },
+          { label:'10pm',    colour: BOD_COLOUR,  dash: true  },
+        ] as const).map(({ label, colour, dash }) => (
+          <span key={label} style={{ display:'flex', alignItems:'center', gap:'0.35rem', fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'#333' }}>
+            <span style={{ display:'inline-block', width:20, height:2,
+              background: dash ? 'transparent' : colour,
+              borderTop: dash ? `2px dashed ${colour}` : 'none',
+              flexShrink:0 }} />
+            {label}
+          </span>
+        ))}
+      </div>
       {/* Chart */}
       <ResponsiveContainer width="100%" height={280}>
-        <ComposedChart data={chartData} margin={{ top: 40, right: 16, left: 0, bottom: 8 }}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="label"
-            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#5A5448' }}
+            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#555' }}
             tickLine={false} axisLine={{ stroke: 'var(--border)' }} />
           <YAxis domain={[minP, maxP]}
-            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#5A5448' }}
+            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#555' }}
             tickLine={false} axisLine={false} width={52}
             tickFormatter={v => `$${v}`} />
           <Tooltip content={<PriceTooltip />} />
-          <Legend verticalAlign="top" align="left" wrapperStyle={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: '#2D2920', paddingBottom: '0.5rem' }} />
 
           {/* Scheduled price dots */}
           <Line dataKey="BOD"  type="monotone" stroke={BOD_COLOUR} strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="BOD" />
@@ -220,18 +238,24 @@ function SttmPanel({ sttm, gbbDate }: { sttm: SttmDay[]; gbbDate: string }) {
 
       </div>
 
+      {/* HTML legend — in normal doc flow, never overlaps */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem 1rem', padding:'0.5rem 0', marginBottom:'0.5rem', borderBottom:'1px solid var(--border)' }}>
+        <span style={{ display:'flex', alignItems:'center', gap:'0.35rem', fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'#333' }}>
+          <span style={{ display:'inline-block', width:20, height:3, background:STTM_COLOUR, borderRadius:2, flexShrink:0 }} />
+          Ex-Post Price
+        </span>
+      </div>
       <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={chartData} margin={{ top: 40, right: 16, left: 0, bottom: 8 }}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="label"
-            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#5A5448' }}
+            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#555' }}
             tickLine={false} axisLine={{ stroke: 'var(--border)' }} />
           <YAxis domain={[minP, maxP]}
-            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#5A5448' }}
+            tick={{ fontFamily: 'var(--font-data)', fontSize: 9, fill: '#555' }}
             tickLine={false} axisLine={false} width={52}
             tickFormatter={v => `$${v}`} />
           <Tooltip content={<PriceTooltip />} />
-          <Legend verticalAlign="top" align="left" wrapperStyle={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: '#2D2920', paddingBottom: '0.5rem' }} />
           <Area dataKey="Ex-Post Price" type="monotone"
             stroke={STTM_COLOUR} strokeWidth={2.5}
             fill={STTM_COLOUR} fillOpacity={0.12}

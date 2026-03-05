@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useElecData } from './MainDashboard'
 
@@ -270,6 +270,19 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
           </div>
           <CsvButton onClick={() => downloadCsv(visibleRows.map((r: any) => ({ datetime: r.datetime, price: r.price, ...Object.fromEntries(facilities.map((f: string) => [f, r[f]])) })), `generation-${region}.csv`)} />
         </div>
+        {/* HTML legend — sits in normal document flow, never overlaps */}
+        <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem 1rem', padding:'0.5rem 0', marginBottom:'0.5rem', borderBottom:'1px solid var(--border)' }}>
+          {facilities.map((name: string, i: number) => (
+            <span key={name} style={{ display:'flex', alignItems:'center', gap:'0.35rem', fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'#333' }}>
+              <span style={{ display:'inline-block', width:20, height:3, background:FACILITY_COLOURS[i % FACILITY_COLOURS.length], borderRadius:2, flexShrink:0 }} />
+              {name}
+            </span>
+          ))}
+          <span style={{ display:'flex', alignItems:'center', gap:'0.35rem', fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'#333' }}>
+            <span style={{ display:'inline-block', width:20, height:2, borderTop:`2px dashed ${PRICE_COLOUR}`, flexShrink:0 }} />
+            Spot Price ($/MWh)
+          </span>
+        </div>
         <ResponsiveContainer width="100%" height={320}>
           <ComposedChart data={chartRows} margin={{ top:8, right:20, left:0, bottom:8 }}>
             <defs>
@@ -293,7 +306,6 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
               tick={{ fill: PRICE_COLOUR, fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={false} width={62} tickFormatter={v => `$${v}`} />
             <Tooltip content={<SqTooltip />} />
-            <Legend wrapperStyle={{ fontSize:'0.68rem', fontFamily:'var(--font-data)', color:'#333', paddingTop:'0.5rem' }} />
             {facilities.map((name: string, i: number) => (
               <Area key={name} yAxisId="gen" type="monotone" dataKey={name}
                 stroke={FACILITY_COLOURS[i % FACILITY_COLOURS.length]} strokeWidth={0}

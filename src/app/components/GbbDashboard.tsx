@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+  Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { useGbbData } from './MainDashboard'
 
@@ -284,8 +284,37 @@ const YAXIS_PROPS = {
   tick:{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' },
   tickLine:false, axisLine:false, width:52,
 }
-const LEGEND_STYLE = { fontSize:'0.68rem', fontFamily:'var(--font-data)', color:'#333', paddingTop:'0.5rem', lineHeight:'1.6' }
-const CHART_MARGIN = { top:8, right:12, left:0, bottom:8 }
+const CHART_MARGIN = { top:8, right:12, left:0, bottom:12 }
+
+// ── Inline HTML legend — renders in normal document flow, never overlaps ───────
+function ChartLegend({ items }: { items: { label: string; colour: string; dash?: boolean }[] }) {
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: '0.4rem 1.1rem',
+      padding: '0.65rem 0.85rem',
+      margin: '0 0 1rem 0',
+      background: 'var(--surface-2)',
+      border: '1px solid var(--border)',
+      borderRadius: '6px',
+      minHeight: '2.2rem',
+    }}>
+      {items.map(({ label, colour, dash }) => (
+        <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem',
+          fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: '#222',
+          whiteSpace: 'nowrap' }}>
+          <span style={{
+            display: 'inline-block', flexShrink: 0,
+            width: 22, height: dash ? 0 : 4,
+            background: dash ? 'transparent' : colour,
+            borderTop: dash ? `2.5px dashed ${colour}` : 'none',
+            borderRadius: 2,
+          }} />
+          {label}
+        </span>
+      ))}
+    </div>
+  )
+}
 
 // ── GPG Panel ─────────────────────────────────────────────────────────────────
 type DemandType = 'gpg' | 'large'
@@ -361,19 +390,21 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
           No data available for {state}
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={rows} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
-            <YAxis {...YAXIS_PROPS} />
-            <Tooltip content={<SqTooltip unit="TJ" />} />
-            <Legend wrapperStyle={LEGEND_STYLE} />
-            {facilities.map((f,i) => (
-              <Bar key={f} dataKey={f} stackId="g" fill={PALETTE[i%PALETTE.length]}
-                radius={i === facilities.length-1 ? [2,2,0,0] : [0,0,0,0]} />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
+        <>
+          <ChartLegend items={facilities.map((f,i) => ({ label: f, colour: PALETTE[i%PALETTE.length] }))} />
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={rows} margin={CHART_MARGIN}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
+              <YAxis {...YAXIS_PROPS} />
+              <Tooltip content={<SqTooltip unit="TJ" />} />
+              {facilities.map((f,i) => (
+                <Bar key={f} dataKey={f} stackId="g" fill={PALETTE[i%PALETTE.length]}
+                  radius={i === facilities.length-1 ? [2,2,0,0] : [0,0,0,0]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </>
       )}
 
       <RangeControls dates={dates} dateRange={range} onChange={setRange}
@@ -427,34 +458,41 @@ function StoragePanel({ dates, storageByFacility }: {
       </div>
       {stateGroups.length > 1 && <StateTabs states={stateGroups} active={state} onChange={setState} />}
       {metric === 'level' ? (
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={levelRows} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
-            <YAxis {...YAXIS_PROPS} tickFormatter={v => fmt0(v)} />
-            <Tooltip content={<SqTooltip unit="TJ" />} />
-            <Legend wrapperStyle={LEGEND_STYLE} />
-            {sf.map((f,i) => (
-              <Line key={f} type="monotone" dataKey={f} stroke={PALETTE[i%PALETTE.length]}
-                strokeWidth={2} dot={false} connectNulls activeDot={{r:3,strokeWidth:0}} />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
+        <>
+          <ChartLegend items={sf.map((f,i) => ({ label: f, colour: PALETTE[i%PALETTE.length] }))} />
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={levelRows} margin={CHART_MARGIN}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
+              <YAxis {...YAXIS_PROPS} tickFormatter={v => fmt0(v)} />
+              <Tooltip content={<SqTooltip unit="TJ" />} />
+              {sf.map((f,i) => (
+                <Line key={f} type="monotone" dataKey={f} stroke={PALETTE[i%PALETTE.length]}
+                  strokeWidth={2} dot={false} connectNulls activeDot={{r:3,strokeWidth:0}} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </>
       ) : (
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={flowRows} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
-            <YAxis {...YAXIS_PROPS} />
-            <ReferenceLine y={0} stroke="var(--border-2)" />
-            <Tooltip content={<SqTooltip unit="TJ" />} />
-            <Legend wrapperStyle={LEGEND_STYLE} />
-            {sf.flatMap((f,i) => [
-              <Bar key={`${f}-in`}  dataKey={`${f} inject`}   fill={PALETTE[i%PALETTE.length]}     radius={[2,2,0,0]} />,
-              <Bar key={`${f}-out`} dataKey={`${f} withdraw`} fill={PALETTE[(i+5)%PALETTE.length]} radius={[2,2,0,0]} />,
-            ])}
-          </BarChart>
-        </ResponsiveContainer>
+        <>
+          <ChartLegend items={sf.flatMap((f,i) => [
+            { label: `${f} inject`,   colour: PALETTE[i%PALETTE.length] },
+            { label: `${f} withdraw`, colour: PALETTE[(i+5)%PALETTE.length] },
+          ])} />
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={flowRows} margin={CHART_MARGIN}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
+              <YAxis {...YAXIS_PROPS} />
+              <ReferenceLine y={0} stroke="var(--border-2)" />
+              <Tooltip content={<SqTooltip unit="TJ" />} />
+              {sf.flatMap((f,i) => [
+                <Bar key={`${f}-in`}  dataKey={`${f} inject`}   fill={PALETTE[i%PALETTE.length]}     radius={[2,2,0,0]} />,
+                <Bar key={`${f}-out`} dataKey={`${f} withdraw`} fill={PALETTE[(i+5)%PALETTE.length]} radius={[2,2,0,0]} />,
+              ])}
+            </BarChart>
+          </ResponsiveContainer>
+        </>
       )}
       <RangeControls dates={dates} dateRange={range} onChange={setRange}
         sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
@@ -529,13 +567,13 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
       )}
 
       {states.length > 1 && <StateTabs states={states} active={state} onChange={setState} />}
-      <ResponsiveContainer width="100%" height={300}>
+      <ChartLegend items={active.map(f => ({ label: f, colour: PALETTE[allFacilities.indexOf(f) % PALETTE.length] }))} />
+      <ResponsiveContainer width="100%" height={280}>
         <LineChart data={rows} margin={CHART_MARGIN}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
           <YAxis {...YAXIS_PROPS} />
           <Tooltip content={<SqTooltip unit="TJ" />} />
-          <Legend wrapperStyle={LEGEND_STYLE} />
           {active.map(f => (
             <Line key={f} type="monotone" dataKey={f}
               stroke={PALETTE[allFacilities.indexOf(f) % PALETTE.length]}
@@ -731,7 +769,6 @@ function PipelinePanel({ dates, pipelineFlows }: {
           <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
           <YAxis {...YAXIS_PROPS} />
           <Tooltip content={<SqTooltip unit="TJ" />} />
-          <Legend wrapperStyle={LEGEND_STYLE} />
           {visiblePipes.map(p => (
             <Line key={p} type="monotone" dataKey={p}
               stroke={PIPE_COLOURS[p] ?? 'var(--accent)'} strokeWidth={2}
@@ -758,6 +795,7 @@ function PipelinePanel({ dates, pipelineFlows }: {
               <span style={{ fontWeight:600, fontSize:'0.82rem', color:'var(--text)' }}>Nameplate Capacity Utilisation</span>
               <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>%</span>
             </div>
+            <ChartLegend items={visiblePipes.filter(p => pipelineFlows[p]?.nameplateCapacity != null).map(p => ({ label: p, colour: PIPE_COLOURS[p] ?? 'var(--accent)' }))} />
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={utilRows} margin={CHART_MARGIN}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -766,7 +804,6 @@ function PipelinePanel({ dates, pipelineFlows }: {
                 <ReferenceLine y={100} stroke="var(--negative)" strokeDasharray="4 2" strokeWidth={1.5} label={{ value:'100%', position:'insideTopRight', fontSize:9, fill:'var(--negative)', fontFamily:'var(--font-data)' }} />
                 <ReferenceLine y={70}  stroke="var(--neutral)"  strokeDasharray="4 2" strokeWidth={1}   label={{ value:'70%',  position:'insideTopRight', fontSize:9, fill:'var(--neutral)',  fontFamily:'var(--font-data)' }} />
                 <Tooltip content={<SqTooltip unit="%" />} />
-                <Legend wrapperStyle={LEGEND_STYLE} />
                 {visiblePipes.filter(p => pipelineFlows[p]?.nameplateCapacity != null).map(p => (
                   <Line key={p} type="monotone" dataKey={p}
                     stroke={PIPE_COLOURS[p] ?? 'var(--accent)'} strokeWidth={2}
