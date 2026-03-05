@@ -2,6 +2,19 @@ const BASE_URL = 'https://api.openelectricity.org.au/v4'
 const GAS_FUELTECHS = new Set(['gas_ccgt', 'gas_ocgt', 'gas_recip', 'gas_steam', 'gas_wcmg'])
 const REGIONS = ['NSW1', 'VIC1']
 
+// Fuel mix groupings — map OE fueltech IDs → display category
+const FUEL_MIX_GROUPS: Record<string, string> = {
+  coal_black:   'Coal', coal_brown:   'Coal',
+  wind:         'Wind', wind_offshore: 'Wind',
+  solar_utility:'Solar', solar_rooftop:'Solar',
+  gas_ccgt:     'Gas',  gas_ocgt: 'Gas', gas_recip: 'Gas', gas_steam: 'Gas', gas_wcmg: 'Gas',
+  battery_discharging: 'Battery',
+  imports:      'Imports',
+  distillate:   'Gas',   // peaking diesel — minor, lump with gas or omit
+}
+const FUEL_MIX_ORDER = ['Coal','Gas','Wind','Solar','Battery','Imports']
+
+
 const FIVE_MIN_PERIODS: Record<string, number> = {
   '5m': 1, '1h': 12, '1d': 288, '7d': 2016,
   '1M': 8928, '3M': 26784, '1y': 105120, 'fy': 105120,
@@ -93,6 +106,78 @@ function aggregateFacility(unitSeries: Record<string, [string, number][]>, inter
   return result
 }
 
+
+async function fetchFuelMix(region: string, interval: string): Promise<{
+  dates: string[]
+  series: Record<string, (number | null)[]>
+}> {
+  try {
+    const resp = await apiFetch(`${BASE_URL}/data/network/NEM`, {
+      metrics: 'power',
+      network_region: region,
+      interval,
+      primary_grouping:   'network_region',
+      secondary_grouping: 'fueltech',
+    })
+
+    // Parse into fueltech → timeseries map
+    const raw: Record<string, Record<string, number>> = {}
+    for (const series of resp.data ?? []) {
+      for (const item of series.results ?? []) {
+        const ftId: string = item.columns?.fueltech_id ?? item.fueltech_id ?? ''
+        const group = FUEL_MIX_GROUPS[ftId]
+        if (!group) continue
+        if (!raw[group]) raw[group] = {}
+        for (const [ts, v] of item.data ?? []) {
+          if (!Array.isArray(ts) && typeof v === 'number') {
+            const key = toAEST(ts as string)
+            raw[group][key] = (raw[group][key] ?? 0) + v
+          } else if (Array.isArray(ts)) {
+            // [datetime, value] format
+            const [dt, val] = ts as any
+            if (typeof val === 'number') {
+              const key = toAEST(dt)
+              raw[group][key] = (raw[group][key] ?? 0) + val
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback: handle flat history format  
+    if (Object.keys(raw).length === 0) {
+      for (const series of resp.data ?? []) {
+        const ftId: string = series.fueltech_id ?? ''
+        const group = FUEL_MIX_GROUPS[ftId]
+        if (!group) continue
+        if (!raw[group]) raw[group] = {}
+        if (series.history?.start) {
+          const { start, data: values, interval: iv } = series.history
+          const mins = iv === '5m' ? 5 : iv === '1h' ? 60 : 1440
+          let dt = new Date(start)
+          for (const v of values ?? []) {
+            if (typeof v === 'number') {
+              const key = toAEST(dt.toISOString())
+              raw[group][key] = (raw[group][key] ?? 0) + v
+            }
+            dt = new Date(dt.getTime() + mins * 60000)
+          }
+        }
+      }
+    }
+
+    const allDates = Array.from(new Set(Object.values(raw).flatMap(m => Object.keys(m)))).sort()
+    const series: Record<string, (number | null)[]> = {}
+    for (const grp of FUEL_MIX_ORDER) {
+      if (raw[grp]) series[grp] = allDates.map(d => raw[grp][d] ?? null)
+    }
+    return { dates: allDates, series }
+  } catch (e) {
+    console.warn(`Fuel mix fetch failed for ${region}:`, e)
+    return { dates: [], series: {} }
+  }
+}
+
 export async function getEnergyData({ interval }: EnergyParams) {
   const facilities = await fetchGasFacilities()
   const regionData: Record<string, any> = {}
@@ -144,9 +229,12 @@ export async function getEnergyData({ interval }: EnergyParams) {
         if (v !== null) totalGenPerTime[ts] = (totalGenPerTime[ts] ?? 0) + v
     const totalGenVals = Object.values(totalGenPerTime)
 
+    const fuelMix = await fetchFuelMix(region, interval)
+
     regionData[label] = {
       facilities: facilitySeriesMap.map(f => f.name),
       rows,
+      fuelMix,
       summary: {
         avgPrice:      priceVals.length ? priceVals.reduce((a, b) => a + b, 0) / priceVals.length : null,
         maxPrice:      priceVals.length ? Math.max(...priceVals) : null,

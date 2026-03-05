@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
-  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
+  ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useElecData } from './MainDashboard'
@@ -16,6 +16,18 @@ const FACILITY_COLOURS = [
   '#A0522D','#4A7FA5','#8B6914','#5D4E6D','#2D6E6E',
 ]
 const PRICE_COLOUR = '#C0334A'
+
+const FUEL_MIX_ORDER  = ['Coal','Gas','Wind','Solar','Battery','Imports'] as const
+type FuelCategory = typeof FUEL_MIX_ORDER[number]
+const FUEL_MIX_COLOURS: Record<FuelCategory, string> = {
+  Coal:    '#5C5240',   // dark warm brown
+  Gas:     '#1B5E7B',   // teal-blue (matches dashboard accent)
+  Wind:    '#2E7D4F',   // forest green
+  Solar:   '#B5880C',   // amber gold
+  Battery: '#7B3FA0',   // purple
+  Imports: '#C0334A',   // red
+}
+
 
 function rowToMs(dt: string) {
   return new Date(dt.replace(' ', 'T') + ':00+10:00').getTime()
@@ -207,6 +219,172 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
   )
 }
 
+// ── Fuel Mix Panel ────────────────────────────────────────────────────────────
+function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
+  fuelMix: { dates: string[]; series: Record<string, (number|null)[]> }
+  dateRange: DateRangeOption; windowSize: number
+  onDateRangeChange: (v: DateRangeOption) => void
+}) {
+  const { dates, series } = fuelMix
+  const present = FUEL_MIX_ORDER.filter(f => series[f])
+
+  // Window slicing — mirror RegionPanel logic
+  const [windowEnd, setWindowEnd] = useState(dates.length - 1)
+  useEffect(() => { setWindowEnd(dates.length - 1) }, [dateRange, dates.length])
+
+  const sliced = useMemo(() => {
+    if (dateRange === 'default') return dates
+    return dates.slice(Math.max(0, windowEnd - windowSize + 1), windowEnd + 1)
+  }, [dates, dateRange, windowSize, windowEnd])
+
+  const sliceStart = dateRange === 'default' ? 0 : Math.max(0, windowEnd - windowSize + 1)
+
+  // Build chart rows as % of total
+  const chartRows = useMemo(() => {
+    return sliced.map((dt, i) => {
+      const gi  = sliceStart + i
+      const row: Record<string, any> = { datetime: dt }
+      const total = present.reduce((s, f) => s + (series[f]?.[gi] ?? 0), 0)
+      for (const f of present) {
+        const mw = series[f]?.[gi] ?? null
+        row[f] = total > 0 && mw !== null ? Math.round(mw / total * 1000) / 10 : null
+      }
+      return row
+    })
+  }, [sliced, sliceStart, series, present])
+
+  // Summary stats — most recent and max gas share over period
+  const summaryRows = useMemo(() => {
+    if (dateRange === 'default') return dates.map((_, i) => i)
+    return Array.from({ length: Math.min(windowSize, dates.length) },
+      (_, i) => Math.max(0, windowEnd - windowSize + 1) + i)
+  }, [dates, dateRange, windowSize, windowEnd])
+
+  const gasShares = useMemo(() => summaryRows.map(gi => {
+    const total = present.reduce((s, f) => s + (series[f]?.[gi] ?? 0), 0)
+    const gas   = series['Gas']?.[gi] ?? 0
+    return total > 0 ? gas / total * 100 : null
+  }).filter((v): v is number => v !== null), [summaryRows, series, present])
+
+  const latestGi   = summaryRows[summaryRows.length - 1] ?? 0
+  const latestTotal = present.reduce((s, f) => s + (series[f]?.[latestGi] ?? 0), 0)
+  const latestGas   = series['Gas']?.[latestGi] ?? 0
+  const latestGasPct = latestTotal > 0 ? (latestGas / latestTotal * 100) : null
+  const maxGasPct    = gasShares.length ? Math.max(...gasShares) : null
+  const latestDt     = dates[latestGi] ?? ''
+
+  const fmtLabel = (d: string) => { const [,mm,dd] = d.split(' ')[0].split('-'); return `${dd}/${mm}` }
+
+  // Smart ticks for x-axis
+  const tickDates = useMemo(() => {
+    if (!chartRows.length) return []
+    const n = chartRows.length, target = 8
+    const step = Math.max(1, Math.floor(n / target))
+    const ticks: string[] = []
+    for (let i = 0; i < n; i += step) ticks.push(chartRows[i].datetime)
+    if (ticks[ticks.length-1] !== chartRows[n-1].datetime) ticks.push(chartRows[n-1].datetime)
+    return ticks
+  }, [chartRows])
+
+  const tickFmt = (v: string) => { const [,mm,dd] = v.split(' ')[0].split('-'); return `${dd}/${mm}` }
+
+  if (!dates.length || !present.length) return null
+
+  return (
+    <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem', marginBottom:'1rem' }}>
+        <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>Energy Mix</h3>
+        <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>% of total generation · {present.join(', ')}</span>
+      </div>
+
+      {/* Gas summary stats */}
+      <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap', marginBottom:'1.1rem' }}>
+        <div style={{ flex:'1 1 160px', padding:'0.45rem 0.7rem',
+          background:'var(--bg)', border:'1px solid var(--border)',
+          borderLeft:`3px solid ${FUEL_MIX_COLOURS['Gas']}`, borderRadius:5 }}>
+          <div style={{ fontFamily:'var(--font-data)', fontSize:'0.58rem', color:'#5A5448',
+            textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:3, fontWeight:600 }}>
+            Gas share — most recent
+          </div>
+          <div style={{ fontFamily:'var(--font-data)', fontSize:'1.1rem', fontWeight:700, color:FUEL_MIX_COLOURS['Gas'], lineHeight:1 }}>
+            {latestGasPct != null ? `${latestGasPct.toFixed(1)}%` : '—'}
+          </div>
+          <div style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'#777', marginTop:3 }}>{latestDt}</div>
+        </div>
+        <div style={{ flex:'1 1 160px', padding:'0.45rem 0.7rem',
+          background:'var(--bg)', border:'1px solid var(--border)',
+          borderLeft:`3px solid ${FUEL_MIX_COLOURS['Gas']}`, borderRadius:5 }}>
+          <div style={{ fontFamily:'var(--font-data)', fontSize:'0.58rem', color:'#5A5448',
+            textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:3, fontWeight:600 }}>
+            Gas share — max for period
+          </div>
+          <div style={{ fontFamily:'var(--font-data)', fontSize:'1.1rem', fontWeight:700, color:FUEL_MIX_COLOURS['Gas'], lineHeight:1 }}>
+            {maxGasPct != null ? `${maxGasPct.toFixed(1)}%` : '—'}
+          </div>
+          <div style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'#777', marginTop:3 }}>peak in view</div>
+        </div>
+      </div>
+
+      {/* HTML legend */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem 1rem', padding:'0.5rem 0',
+        marginBottom:'0.5rem', borderBottom:'1px solid var(--border)' }}>
+        {present.map(f => (
+          <span key={f} style={{ display:'flex', alignItems:'center', gap:'0.35rem',
+            fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'#333' }}>
+            <span style={{ display:'inline-block', width:14, height:14, borderRadius:3,
+              background:FUEL_MIX_COLOURS[f as FuelCategory], flexShrink:0 }} />
+            {f}
+          </span>
+        ))}
+      </div>
+
+      {/* Stacked area chart */}
+      <ResponsiveContainer width="100%" height={260}>
+        <AreaChart data={chartRows} margin={{ top:4, right:16, left:0, bottom:4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis dataKey="datetime"
+            ticks={tickDates} tickFormatter={tickFmt}
+            tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
+            tickLine={false} axisLine={{ stroke:'var(--border)' }} />
+          <YAxis tickFormatter={v => `${v}%`} domain={[0, 100]}
+            tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
+            tickLine={false} axisLine={false} width={38} />
+          <Tooltip
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null
+              return (
+                <div style={{ background:'#fff', border:'1px solid #D4D0C8', borderRadius:6,
+                  padding:'0.6rem 0.85rem', fontFamily:'var(--font-data)', fontSize:'0.72rem',
+                  boxShadow:'0 4px 16px rgba(0,0,0,0.08)', minWidth:160 }}>
+                  <div style={{ fontWeight:700, color:'#1A1814', marginBottom:'0.35rem' }}>{label?.split(' ')[0]}</div>
+                  {payload.slice().reverse().map((p: any) => p.value != null && (
+                    <div key={p.dataKey} style={{ display:'flex', justifyContent:'space-between',
+                      gap:'1.25rem', marginBottom:2, alignItems:'center' }}>
+                      <span style={{ display:'flex', alignItems:'center', gap:5 }}>
+                        <span style={{ width:9, height:9, borderRadius:2, background:p.fill, display:'inline-block', flexShrink:0 }} />
+                        <span style={{ color:'#444' }}>{p.dataKey}</span>
+                      </span>
+                      <span style={{ fontWeight:600, color:'#1A1814' }}>{Number(p.value).toFixed(1)}%</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            }}
+          />
+          {present.map(f => (
+            <Area key={f} type="monotone" dataKey={f} stackId="mix"
+              stroke={FUEL_MIX_COLOURS[f as FuelCategory]}
+              fill={FUEL_MIX_COLOURS[f as FuelCategory]}
+              fillOpacity={0.85} strokeWidth={0.5}
+              dot={false} connectNulls />
+          ))}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 // ── Region panel ───────────────────────────────────────────────────────────────
 function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
   region: 'NSW'|'VIC'; data: any; dateRange: DateRangeOption; onDateRangeChange: (v: DateRangeOption) => void
@@ -332,6 +510,16 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
           )}
         </div>
       </div>
+
+      {/* Energy mix chart */}
+      {data.fuelMix && data.fuelMix.dates?.length > 0 && (
+        <FuelMixPanel
+          fuelMix={data.fuelMix}
+          dateRange={dateRange}
+          windowSize={windowSize}
+          onDateRangeChange={onDateRangeChange}
+        />
+      )}
 
       {/* Data table */}
       <div className="sq-card" style={{ overflow:'hidden', marginBottom:'1rem' }}>

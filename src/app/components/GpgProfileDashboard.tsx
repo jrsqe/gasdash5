@@ -57,49 +57,54 @@ function getWeekStart(dt: Date): Date {
 interface WeekData {
   week: string; weekStart: Date
   none: number; peak: number; extended: number; baseload: number; totalHours: number
+  mwh: Record<RunClass, number>
 }
 
 function buildUnitProfile(rows: { datetime: string; [k: string]: any }[], facility: string): WeekData[] {
   if (!rows.length) return []
   const values = rows.map(r => { const v = r[facility]; return (v != null && !isNaN(v)) ? (v as number) : null })
   const classes = classifyHours(values)
-  const weekMap = new Map<string, { counts: Record<RunClass, number>; ws: Date }>()
+  const weekMap = new Map<string, { counts: Record<RunClass, number>; mwh: Record<RunClass, number>; ws: Date }>()
   for (let i = 0; i < rows.length; i++) {
     const dt = new Date(rows[i].datetime), cls = classes[i], wk = weekLabel(dt)
-    if (!weekMap.has(wk)) weekMap.set(wk, { counts: { none:0, peak:0, extended:0, baseload:0 }, ws: getWeekStart(dt) })
-    weekMap.get(wk)!.counts[cls]++
+    if (!weekMap.has(wk)) weekMap.set(wk, { counts: { none:0, peak:0, extended:0, baseload:0 }, mwh: { none:0, peak:0, extended:0, baseload:0 }, ws: getWeekStart(dt) })
+    const entry = weekMap.get(wk)!
+    entry.counts[cls]++
+    entry.mwh[cls] += values[i] ?? 0   // 1h interval → MW = MWh
   }
-  return Array.from(weekMap.entries()).map(([week, { counts, ws }]) => {
+  return Array.from(weekMap.entries()).map(([week, { counts, mwh, ws }]) => {
     const total = counts.none + counts.peak + counts.extended + counts.baseload
     return { week, weekStart: ws,
       none:     total > 0 ? Math.round(counts.none     / total * 1000) / 10 : 0,
       peak:     total > 0 ? Math.round(counts.peak     / total * 1000) / 10 : 0,
       extended: total > 0 ? Math.round(counts.extended / total * 1000) / 10 : 0,
       baseload: total > 0 ? Math.round(counts.baseload / total * 1000) / 10 : 0,
-      totalHours: total }
+      totalHours: total, mwh }
   }).sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
 }
 
 function buildAggregateProfile(rows: { datetime: string; [k: string]: any }[], facilities: string[]): WeekData[] {
   if (!rows.length || !facilities.length) return []
-  const weekMap = new Map<string, { counts: Record<RunClass, number>; ws: Date }>()
+  const weekMap = new Map<string, { counts: Record<RunClass, number>; mwh: Record<RunClass, number>; ws: Date }>()
   for (const fac of facilities) {
     const values = rows.map(r => { const v = r[fac]; return (v != null && !isNaN(v)) ? (v as number) : null })
     const classes = classifyHours(values)
     for (let i = 0; i < rows.length; i++) {
       const dt = new Date(rows[i].datetime), cls = classes[i], wk = weekLabel(dt)
-      if (!weekMap.has(wk)) weekMap.set(wk, { counts: { none:0, peak:0, extended:0, baseload:0 }, ws: getWeekStart(dt) })
-      weekMap.get(wk)!.counts[cls]++
+      if (!weekMap.has(wk)) weekMap.set(wk, { counts: { none:0, peak:0, extended:0, baseload:0 }, mwh: { none:0, peak:0, extended:0, baseload:0 }, ws: getWeekStart(dt) })
+      const entry = weekMap.get(wk)!
+      entry.counts[cls]++
+      entry.mwh[cls] += values[i] ?? 0
     }
   }
-  return Array.from(weekMap.entries()).map(([week, { counts, ws }]) => {
+  return Array.from(weekMap.entries()).map(([week, { counts, mwh, ws }]) => {
     const total = counts.none + counts.peak + counts.extended + counts.baseload
     return { week, weekStart: ws,
       none:     total > 0 ? Math.round(counts.none     / total * 1000) / 10 : 0,
       peak:     total > 0 ? Math.round(counts.peak     / total * 1000) / 10 : 0,
       extended: total > 0 ? Math.round(counts.extended / total * 1000) / 10 : 0,
       baseload: total > 0 ? Math.round(counts.baseload / total * 1000) / 10 : 0,
-      totalHours: total }
+      totalHours: total, mwh }
   }).sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
 }
 
@@ -169,19 +174,38 @@ function ProfileChart({ weeklyData, height = 240 }: { weeklyData: WeekData[]; he
   )
 }
 
+function fmtMwh(mwh: number): string {
+  if (mwh >= 1_000_000) return `${(mwh / 1_000_000).toFixed(2)} TWh`
+  if (mwh >= 1_000)     return `${Math.round(mwh / 1_000).toLocaleString()} GWh`
+  return `${Math.round(mwh).toLocaleString()} MWh`
+}
+
 function SummaryStats({ weeklyData }: { weeklyData: WeekData[] }) {
   const totals = weeklyData.reduce(
-    (acc, w) => { const h = w.totalHours
-      acc.none += w.none*h/100; acc.peak += w.peak*h/100
-      acc.extended += w.extended*h/100; acc.baseload += w.baseload*h/100; acc.total += h; return acc },
-    { none:0, peak:0, extended:0, baseload:0, total:0 }
+    (acc, w) => {
+      const h = w.totalHours
+      acc.none     += w.none     * h / 100
+      acc.peak     += w.peak     * h / 100
+      acc.extended += w.extended * h / 100
+      acc.baseload += w.baseload * h / 100
+      acc.total    += h
+      const mwh = w.mwh ?? { none:0, peak:0, extended:0, baseload:0 }
+      acc.mwh.none     += mwh.none
+      acc.mwh.peak     += mwh.peak
+      acc.mwh.extended += mwh.extended
+      acc.mwh.baseload += mwh.baseload
+      return acc
+    },
+    { none:0, peak:0, extended:0, baseload:0, total:0,
+      mwh: { none:0, peak:0, extended:0, baseload:0 } }
   )
   return (
     <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap', marginBottom:'0.85rem' }}>
       {(['baseload','extended','peak','none'] as RunClass[]).map(cls => {
-        const pct = totals.total > 0 ? (totals[cls]/totals.total*100).toFixed(1) : '0'
+        const pct    = totals.total > 0 ? (totals[cls] / totals.total * 100).toFixed(1) : '0'
+        const colour = cls === 'none' ? '#7A7060' : CLASS_COLOURS[cls]
         return (
-          <div key={cls} style={{ flex:'1 1 100px', padding:'0.45rem 0.65rem',
+          <div key={cls} style={{ flex:'1 1 110px', padding:'0.45rem 0.65rem',
             background:'#fff', border:'1px solid #D4D0C8',
             borderLeft:`3px solid ${CLASS_COLOURS[cls]}`, borderRadius:5 }}>
             <div style={{ fontFamily:'var(--font-data)', fontSize:'0.58rem', color:'#5A5448',
@@ -189,7 +213,10 @@ function SummaryStats({ weeklyData }: { weeklyData: WeekData[] }) {
               {CLASS_LABELS[cls]}
             </div>
             <div style={{ fontFamily:'var(--font-data)', fontSize:'1rem', fontWeight:700,
-              color: cls === 'none' ? '#3A6DA0' : CLASS_COLOURS[cls] }}>{pct}%</div>
+              color, lineHeight:1 }}>{pct}%</div>
+            <div style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'#555', marginTop:4 }}>
+              {fmtMwh(totals.mwh[cls])}
+            </div>
           </div>
         )
       })}
