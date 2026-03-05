@@ -213,7 +213,7 @@ function SummaryStats({ weeklyData }: { weeklyData: WeekData[] }) {
               {CLASS_LABELS[cls]}
             </div>
             <div style={{ fontFamily:'var(--font-data)', fontSize:'1rem', fontWeight:700,
-              color, lineHeight:1 }}>{pct}%</div>
+              color: colour, lineHeight:1 }}>{pct}%</div>
             <div style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'#555', marginTop:4 }}>
               {fmtMwh(totals.mwh[cls])}
             </div>
