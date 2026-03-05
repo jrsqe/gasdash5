@@ -11,10 +11,10 @@ const EXT_PEAK_MAX = 13
 type RunClass = 'peak' | 'extended' | 'baseload' | 'none'
 
 const CLASS_COLOURS: Record<RunClass, string> = {
-  baseload: '#1B3A5C',
-  extended: '#3A6DA0',
-  peak:     '#6B9FC2',
-  none:     '#C5D8E8',
+  baseload: '#1B5E7B',   // deep teal  — strong committed generation
+  extended: '#2E7D4F',   // forest green — significant running time
+  peak:     '#B5880C',   // amber gold  — short bursts
+  none:     '#D9D4CC',   // warm grey   — clearly "off"
 }
 const CLASS_LABELS: Record<RunClass, string> = {
   baseload: 'Baseload (≥ 13h)',
