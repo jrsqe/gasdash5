@@ -118,7 +118,15 @@ async function fetchAllSttm(): Promise<{ syd: SttmDay[]; bri: SttmDay[]; ade: St
   return {
     syd: parseSttmHub(rows, 'SYD'),
     bri: parseSttmHub(rows, 'BRI'),
-    ade: parseSttmHub(rows, 'ADE'),
+    ade: (() => {
+      // AEMO STTM CSV uses 'ADL' for Adelaide hub (not 'ADE')
+      const adl = parseSttmHub(rows, 'ADL')
+      if (adl.length) return adl
+      const ade = parseSttmHub(rows, 'ADE')
+      if (ade.length) return ade
+      // fallback: try full name
+      return parseSttmHub(rows, 'ADELAIDE')
+    })(),
   }
 }
 

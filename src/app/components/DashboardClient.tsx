@@ -103,26 +103,36 @@ function tickFmt(val: string) {
 // For "all" view, samples ~8 evenly-spaced ticks and formats as "DD Mon YY".
 // For shorter views, keeps recharts default behaviour (pass null ticks).
 function elecSmartTicks(rows: any[], dateRange: string): {
-  ticks: string[] | undefined
+  ticks: string[]
   formatter: (v: string) => string
 } {
-  if (dateRange !== 'default' || rows.length === 0) {
-    // Short view: use existing tickFmt (date + time)
-    return { ticks: undefined, formatter: tickFmt }
-  }
-  // "All" view: pick ~8 evenly-spaced rows, format as "DD Mon YY"
-  const n = rows.length
-  const target = 8
-  const step = Math.max(1, Math.floor(n / target))
+  if (rows.length === 0) return { ticks: [], formatter: tickFmt }
+
+  // Always explicitly sample ticks — never let recharts decide (causes crowding)
+  const target = dateRange === 'default' ? 8 : dateRange === '7d' ? 7 : dateRange === '3d' ? 6 : 6
+  const n    = rows.length
+  const step = Math.max(1, Math.floor(n / (target - 1)))
   const ticks: string[] = []
   for (let i = 0; i < n; i += step) ticks.push(rows[i].datetime)
-  if (ticks[ticks.length-1] !== rows[n-1].datetime) ticks.push(rows[n-1].datetime)
-  const formatter = (val: string) => {
-    const date = val.split(' ')[0] ?? ''
-    const [yyyy, mm, dd] = date.split('-')
-    const mon = MONTHS[parseInt(mm ?? '1') - 1] ?? ''
-    return `${parseInt(dd ?? '0')} ${mon} ${(yyyy ?? '').slice(2)}`
-  }
+  // Always include last point
+  const last = rows[n - 1].datetime
+  if (ticks[ticks.length - 1] !== last) ticks.push(last)
+
+  // Format: "All" view → "DD Mon YY", shorter views → "DD/MM HH:MM"
+  const formatter = dateRange === 'default'
+    ? (val: string) => {
+        const date = val.split(' ')[0] ?? ''
+        const [yyyy, mm, dd] = date.split('-')
+        const mon = MONTHS[parseInt(mm ?? '1') - 1] ?? ''
+        return `${parseInt(dd ?? '0')} ${mon} ${(yyyy ?? '').slice(2)}`
+      }
+    : (val: string) => {
+        const [date, time] = val.split(' ')
+        const [, mm, dd]   = (date ?? '').split('-')
+        const hhmm         = (time ?? '').slice(0, 5)
+        return `${dd}/${mm} ${hhmm}`
+      }
+
   return { ticks, formatter }
 }
 
@@ -410,8 +420,7 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
           <XAxis dataKey="datetime"
             ticks={tickDates} tickFormatter={tickFmt}
             tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-            tickLine={false} axisLine={{ stroke:'var(--border)' }}
-            interval="preserveStartEnd" />
+            tickLine={false} axisLine={{ stroke:'var(--border)' }} interval={0} />
           <YAxis tickFormatter={v => `${v}%`} domain={[0, 100]}
             tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
             tickLine={false} axisLine={false} width={38} />
@@ -542,7 +551,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
               ticks={elecSmartTicks(chartRows, dateRange).ticks}
               tickFormatter={elecSmartTicks(chartRows, dateRange).formatter}
               tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-              tickLine={false} axisLine={{ stroke:'var(--border)' }} interval="preserveStartEnd" />
+              tickLine={false} axisLine={{ stroke:'var(--border)' }} interval={0} />
             <YAxis yAxisId="gen"
               tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={false} width={54} tickFormatter={v => `${v} MW`} />
