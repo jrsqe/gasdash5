@@ -327,33 +327,33 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
     return { slicedDates: dates.slice(start, windowEnd + 1), sliceStart: start }
   }, [dates, dateRange, windowSize, windowEnd])
 
-  // Build chart rows as % of total — uses reactive sliceStart
+  // Build chart rows in MW — also store total for % calculation in tooltip
   const chartRows = useMemo(() => {
     return slicedDates.map((dt, i) => {
-      const gi  = sliceStart + i
+      const gi    = sliceStart + i
       const row: Record<string, any> = { datetime: dt }
       const total = present.reduce((s, f) => s + (series[f]?.[gi] ?? 0), 0)
+      row.__total = total
       for (const f of present) {
-        const mw = series[f]?.[gi] ?? null
-        row[f] = total > 0 && mw !== null ? Math.round(mw / total * 1000) / 10 : null
+        row[f] = series[f]?.[gi] ?? null
       }
       return row
     })
   }, [slicedDates, sliceStart, series, present])
 
-  // Gas share stats over current view window
-  const { latestGasPct, maxGasPct, latestDt } = useMemo(() => {
-    if (!chartRows.length) return { latestGasPct: null, maxGasPct: null, latestDt: '' }
-    let maxPct = 0
+  // Gas share stats over current view window (MW + %)
+  const { latestGasMw, latestGasPct, maxGasMw, maxGasPct, latestDt } = useMemo(() => {
+    if (!chartRows.length) return { latestGasMw: null, latestGasPct: null, maxGasMw: null, maxGasPct: null, latestDt: '' }
+    let maxMw = 0, maxPct = 0
     for (const row of chartRows) {
-      const total = present.reduce((s, f) => s + (row[f] ?? 0), 0)
-      const gas   = row['Gas'] ?? 0
-      // chartRows values are already %, total should be ~100
-      if (gas > maxPct) maxPct = gas
+      const gas = row['Gas'] ?? 0
+      const pct = row.__total > 0 ? gas / row.__total * 100 : 0
+      if (gas > maxMw) { maxMw = gas; maxPct = pct }
     }
-    const lastRow  = chartRows[chartRows.length - 1]
-    const latestPct = lastRow?.['Gas'] ?? null
-    return { latestGasPct: latestPct, maxGasPct: maxPct || null, latestDt: lastRow?.datetime ?? '' }
+    const lastRow = chartRows[chartRows.length - 1]
+    const latestMw  = lastRow?.['Gas'] ?? null
+    const latestPct = latestMw != null && lastRow?.__total > 0 ? latestMw / lastRow.__total * 100 : null
+    return { latestGasMw: latestMw, latestGasPct: latestPct, maxGasMw: maxMw || null, maxGasPct: maxPct || null, latestDt: lastRow?.datetime ?? '' }
   }, [chartRows, present])
 
   // Reuse the same smart tick logic as the GPG generation chart
@@ -369,7 +369,7 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
       {/* Header */}
       <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem', marginBottom:'1rem' }}>
         <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>Energy Mix</h3>
-        <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>% of total generation · {present.join(', ')}</span>
+        <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>MW · % share in brackets · {present.join(', ')}</span>
       </div>
 
       {/* Gas summary stats */}
@@ -382,7 +382,10 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
             Gas share — most recent
           </div>
           <div style={{ fontFamily:'var(--font-data)', fontSize:'1.1rem', fontWeight:700, color:FUEL_MIX_COLOURS['Gas'], lineHeight:1 }}>
-            {latestGasPct != null ? `${latestGasPct.toFixed(1)}%` : '—'}
+            {latestGasMw != null ? `${Math.round(latestGasMw).toLocaleString()} MW` : '—'}
+          </div>
+          <div style={{ fontFamily:'var(--font-data)', fontSize:'0.72rem', color:FUEL_MIX_COLOURS['Gas'], marginTop:2 }}>
+            {latestGasPct != null ? `(${latestGasPct.toFixed(1)}% of total)` : ''}
           </div>
           <div style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'#777', marginTop:3 }}>{latestDt}</div>
         </div>
@@ -394,7 +397,10 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
             Gas share — max for period
           </div>
           <div style={{ fontFamily:'var(--font-data)', fontSize:'1.1rem', fontWeight:700, color:FUEL_MIX_COLOURS['Gas'], lineHeight:1 }}>
-            {maxGasPct != null ? `${maxGasPct.toFixed(1)}%` : '—'}
+            {maxGasMw != null ? `${Math.round(maxGasMw).toLocaleString()} MW` : '—'}
+          </div>
+          <div style={{ fontFamily:'var(--font-data)', fontSize:'0.72rem', color:FUEL_MIX_COLOURS['Gas'], marginTop:2 }}>
+            {maxGasPct != null ? `(${maxGasPct.toFixed(1)}% of total)` : ''}
           </div>
           <div style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'#777', marginTop:3 }}>peak in view</div>
         </div>
@@ -421,9 +427,9 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
             ticks={tickDates} tickFormatter={tickFmt}
             tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
             tickLine={false} axisLine={{ stroke:'var(--border)' }} interval={0} />
-          <YAxis tickFormatter={v => `${v}%`} domain={[0, 100]}
+          <YAxis tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}GW` : `${Math.round(v)} MW`}
             tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-            tickLine={false} axisLine={false} width={38} />
+            tickLine={false} axisLine={false} width={48} />
           <Tooltip
             content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null
@@ -432,16 +438,24 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
                   padding:'0.6rem 0.85rem', fontFamily:'var(--font-data)', fontSize:'0.72rem',
                   boxShadow:'0 4px 16px rgba(0,0,0,0.08)', minWidth:160 }}>
                   <div style={{ fontWeight:700, color:'#1A1814', marginBottom:'0.35rem' }}>{label?.split(' ')[0]}</div>
-                  {payload.slice().reverse().map((p: any) => p.value != null && (
-                    <div key={p.dataKey} style={{ display:'flex', justifyContent:'space-between',
-                      gap:'1.25rem', marginBottom:2, alignItems:'center' }}>
-                      <span style={{ display:'flex', alignItems:'center', gap:5 }}>
-                        <span style={{ width:9, height:9, borderRadius:2, background:p.fill, display:'inline-block', flexShrink:0 }} />
-                        <span style={{ color:'#444' }}>{p.dataKey}</span>
-                      </span>
-                      <span style={{ fontWeight:600, color:'#1A1814' }}>{Number(p.value).toFixed(1)}%</span>
-                    </div>
-                  ))}
+                  {payload.slice().reverse().map((p: any) => {
+                    if (p.value == null) return null
+                    const total = p.payload?.__total ?? 0
+                    const pct   = total > 0 ? (p.value / total * 100).toFixed(1) : null
+                    return (
+                      <div key={p.dataKey} style={{ display:'flex', justifyContent:'space-between',
+                        gap:'1.25rem', marginBottom:2, alignItems:'center' }}>
+                        <span style={{ display:'flex', alignItems:'center', gap:5 }}>
+                          <span style={{ width:9, height:9, borderRadius:2, background:p.fill, display:'inline-block', flexShrink:0 }} />
+                          <span style={{ color:'#444' }}>{p.dataKey}</span>
+                        </span>
+                        <span style={{ fontWeight:600, color:'#1A1814' }}>
+                          {Math.round(p.value).toLocaleString()} MW
+                          {pct && <span style={{ fontWeight:400, color:'#777', marginLeft:4 }}>({pct}%)</span>}
+                        </span>
+                      </div>
+                    )
+                  })}
                 </div>
               )
             }}
