@@ -232,7 +232,7 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
     fontFamily: 'var(--font-data)', fontSize: '0.72rem', fontWeight: 600,
     color: 'var(--accent)', background: 'var(--surface)',
     border: '1px solid var(--accent)', borderRadius: 5,
-    padding: '2px 6px', width: 62, outline: 'none', textAlign: 'center',
+    padding: '2px 6px', width: 62, outline: 'none', textAlign: 'center' as const,
   }
   const labelStyle = {
     fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: 'var(--accent)',
@@ -290,7 +290,7 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
           boxShadow: '0 1px 4px rgba(0,0,0,0.15)', pointerEvents: 'none',
         }} />
       </div>
-      <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.58rem', color: 'var(--muted)', marginTop: '0.35rem', textAlign: 'center' }}>
+      <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.58rem', color: 'var(--muted)', marginTop: '0.35rem', textAlign: 'center' as const }}>
         Drag slider or click dates above to type DD/MM
       </div>
     </div>
