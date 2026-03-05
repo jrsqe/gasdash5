@@ -1,6 +1,6 @@
 const BASE_URL = 'https://api.openelectricity.org.au/v4'
 const GAS_FUELTECHS = new Set(['gas_ccgt', 'gas_ocgt', 'gas_recip', 'gas_steam', 'gas_wcmg'])
-const REGIONS = ['NSW1', 'VIC1']
+const REGIONS = ['NSW1', 'VIC1', 'QLD1', 'SA1']
 
 const FUEL_MIX_ORDER = ['Coal','Gas','Wind','Solar','Battery','Imports']
 

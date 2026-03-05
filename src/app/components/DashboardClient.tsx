@@ -452,7 +452,7 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
 
 // ── Region panel ───────────────────────────────────────────────────────────────
 function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
-  region: 'NSW'|'VIC'; data: any; dateRange: DateRangeOption; onDateRangeChange: (v: DateRangeOption) => void
+  region: 'NSW'|'VIC'|'QLD'|'SA'; data: any; dateRange: DateRangeOption; onDateRangeChange: (v: DateRangeOption) => void
 }) {
   const [showTable, setShowTable] = useState(false)
   const { facilities, rows } = data
@@ -483,14 +483,15 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
     { value:'3d', label:'3d' }, { value:'1d', label:'1d' },
   ]
 
-  const regionColour = region === 'NSW' ? '#7B9FF9' : 'var(--accent)'
+  const REGION_COLOURS: Record<string,string> = { NSW:'#7B9FF9', VIC:'#1B5E7B', QLD:'#E4830A', SA:'#8B3FA8' }
+  const regionColour = REGION_COLOURS[region] ?? 'var(--accent)'
 
   return (
     <div>
       <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'1.25rem' }}>
         <div style={{ width:8, height:8, borderRadius:'50%', background: regionColour, boxShadow: `0 0 6px ${regionColour}` }} />
         <h2 style={{ fontSize:'1rem', fontWeight:700, color:'var(--text)', margin:0, letterSpacing:'-0.01em' }}>
-          {region === 'NSW' ? 'New South Wales' : 'Victoria'}
+          {{ NSW:'New South Wales', VIC:'Victoria', QLD:'Queensland', SA:'South Australia' }[region] ?? region}
         </h2>
         <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.65rem', letterSpacing:'0.04em' }}>
           {summary.facilityCount} facilities · {visibleRows.length} intervals
@@ -625,7 +626,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
 
 // ── Main electricity dashboard ─────────────────────────────────────────────────
 export default function DashboardClient({ hideHeader = false }: { hideHeader?: boolean }) {
-  const [activeTab,  setActiveTab]  = useState<'NSW'|'VIC'>('NSW')
+  const [activeTab,  setActiveTab]  = useState<'NSW'|'VIC'|'QLD'|'SA'>('NSW')
   const [interval,   setInterval]   = useState<IntervalOption>('1h')
   const [dateRange,  setDateRange]  = useState<DateRangeOption>('default')
   const { payload, loading, error, fetchedAt, fetch: fetchData } = useElecData(interval)
@@ -645,7 +646,7 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
 
   // Most recent datetime in the dataset (last row of whichever region has data)
   const latestDataDate = useMemo(() => {
-    const rows = payload?.data?.NSW?.rows ?? payload?.data?.VIC?.rows ?? []
+    const rows = payload?.data?.NSW?.rows ?? payload?.data?.VIC?.rows ?? payload?.data?.QLD?.rows ?? payload?.data?.SA?.rows ?? []
     if (!rows.length) return null
     const last = rows[rows.length - 1]?.datetime as string | undefined
     if (!last) return null
@@ -664,9 +665,11 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
         justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem',
       }}>
         <div style={{ display:'flex' }}>
-          {(['NSW','VIC'] as const).map(tab => {
+          {(['NSW','VIC','QLD','SA'] as const).map(tab => {
             const isActive = activeTab === tab
-            const colour   = tab === 'NSW' ? '#7B9FF9' : 'var(--accent)'
+            const TCOL: Record<string,string> = { NSW:'#7B9FF9', VIC:'#1B5E7B', QLD:'#E4830A', SA:'#8B3FA8' }
+            const TLAB: Record<string,string> = { NSW:'New South Wales', VIC:'Victoria', QLD:'Queensland', SA:'South Australia' }
+            const colour = TCOL[tab]
             return (
               <button key={tab} onClick={() => setActiveTab(tab)} style={{
                 padding:'0.75rem 1.25rem', border:'none', background:'transparent',
@@ -674,7 +677,7 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
                 fontSize:'0.82rem', color: isActive ? colour : 'var(--muted)',
                 borderBottom: isActive ? `2px solid ${colour}` : '2px solid transparent',
                 marginBottom:-1, transition:'all 0.15s',
-              }}>{tab === 'NSW' ? 'New South Wales' : 'Victoria'}</button>
+              }}>{TLAB[tab]}</button>
             )
           })}
         </div>
@@ -720,7 +723,7 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
           <div style={{ opacity: loading ? 0.5 : 1, transition:'opacity 0.2s' }}>
             <RegionPanel
               key={`${activeTab}-${interval}`}
-              region={activeTab} data={activeData}
+              region={activeTab as 'NSW'|'VIC'|'QLD'|'SA'} data={activeData}
               dateRange={dateRange} onDateRangeChange={setDateRange}
             />
           </div>

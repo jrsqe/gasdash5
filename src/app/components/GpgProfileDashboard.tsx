@@ -224,7 +224,7 @@ function SummaryStats({ weeklyData }: { weeklyData: WeekData[] }) {
   )
 }
 
-function RegionProfile({ region, data }: { region: 'NSW'|'VIC'; data: any }) {
+function RegionProfile({ region, data }: { region: 'NSW'|'VIC'|'QLD'|'SA'; data: any }) {
   const rows       = (data?.rows       ?? []) as { datetime: string; [k: string]: any }[]
   const facilities = (data?.facilities ?? []) as string[]
 
@@ -244,7 +244,7 @@ function RegionProfile({ region, data }: { region: 'NSW'|'VIC'; data: any }) {
         <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'1rem',
           paddingBottom:'0.6rem', borderBottom:'1px solid #E5E2DC' }}>
           <h3 style={{ margin:0, fontWeight:700, fontSize:'0.9rem', color:'#111' }}>
-            {region === 'NSW' ? 'New South Wales' : 'Victoria'} — All Units Combined
+            {{ NSW:'New South Wales', VIC:'Victoria', QLD:'Queensland', SA:'South Australia' }[region] ?? region} — All Units Combined
           </h3>
           <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'#5A5448',
             background:'#F0EEE9', padding:'0.15rem 0.5rem', borderRadius:3 }}>
@@ -284,7 +284,7 @@ function RegionProfile({ region, data }: { region: 'NSW'|'VIC'; data: any }) {
 
 export default function GpgProfileDashboard() {
   const { payload, loading, error, fetchedAt, fetch: fetchData } = useElecData('1h')
-  const [region, setRegion] = useState<'NSW'|'VIC'>('NSW')
+  const [region, setRegion] = useState<'NSW'|'VIC'|'QLD'|'SA'>('NSW')
 
   useEffect(() => { fetchData('1h') }, [])
 
@@ -298,16 +298,18 @@ export default function GpgProfileDashboard() {
         padding:'0 1.75rem', display:'flex', alignItems:'center',
         justifyContent:'space-between', gap:'1rem', flexWrap:'wrap' }}>
         <div style={{ display:'flex' }}>
-          {(['NSW','VIC'] as const).map(r => {
+          {(['NSW','VIC','QLD','SA'] as const).map(r => {
             const isActive = r === region
-            const colour   = r === 'NSW' ? '#1B5E7B' : '#2A6E44'
+            const RCOL: Record<string,string> = { NSW:'#1B5E7B', VIC:'#2A6E44', QLD:'#E4830A', SA:'#8B3FA8' }
+            const RLAB: Record<string,string> = { NSW:'New South Wales', VIC:'Victoria', QLD:'Queensland', SA:'South Australia' }
+            const colour = RCOL[r]
             return (
               <button key={r} onClick={() => setRegion(r)} style={{
                 padding:'0.8rem 1.5rem', border:'none', background:'transparent', cursor:'pointer',
                 fontFamily:'var(--font-ui)', fontWeight: isActive ? 700 : 400, fontSize:'0.84rem',
                 color: isActive ? colour : '#5A5448',
                 borderBottom: isActive ? `2px solid ${colour}` : '2px solid transparent',
-              }}>{r === 'NSW' ? 'New South Wales' : 'Victoria'}</button>
+              }}>{RLAB[r]}</button>
             )
           })}
         </div>
@@ -337,7 +339,7 @@ export default function GpgProfileDashboard() {
                 1-hour intervals · classified per unit · weekly breakdown
               </span>
             </div>
-            <RegionProfile key={region} region={region} data={payload?.data?.[region]} />
+            <RegionProfile key={region} region={region as 'NSW'|'VIC'|'QLD'|'SA'} data={payload?.data?.[region]} />
           </div>
         )}
       </div>

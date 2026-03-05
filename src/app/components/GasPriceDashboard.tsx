@@ -5,13 +5,22 @@ import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Area
 } from 'recharts'
-import type { DwgmDay, SttmDay } from '@/lib/gasPriceData'
+import type { DwgmDay, SttmDay, SttmHub } from '@/lib/gasPriceData'
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 const DWGM_COLOUR  = '#1B5E7B'   // teal-blue for DWGM weighted avg
 const BOD_COLOUR   = '#5590B8'   // scheduled prices — readable but distinct from weighted avg
-const STTM_COLOUR  = '#8B6914'   // amber for STTM Sydney
 const HILIGHT_CLR  = '#C0334A'   // red reference line for GBB most-recent date
+const STTM_HUB_COLOURS: Record<SttmHub, string> = {
+  SYD: '#8B6914',   // amber
+  BRI: '#E4830A',   // orange (QLD colour)
+  ADE: '#8B3FA8',   // purple (SA colour)
+}
+const STTM_HUB_LABELS: Record<SttmHub, string> = {
+  SYD: 'Sydney',
+  BRI: 'Brisbane',
+  ADE: 'Adelaide',
+}
 
 // ── Data hook ─────────────────────────────────────────────────────────────────
 let priceCache: { data: any; fetchedAt: number } | null = null
@@ -192,10 +201,12 @@ function DwgmPanel({ dwgm, gbbDate }: { dwgm: DwgmDay[]; gbbDate: string }) {
   )
 }
 
-// ── STTM Sydney Panel ─────────────────────────────────────────────────────────
-function SttmPanel({ sttm, gbbDate }: { sttm: SttmDay[]; gbbDate: string }) {
-  const latest = sttm[sttm.length - 1]
-  const gbbRow = sttm.find(d => d.gasDate === gbbDate)
+// ── STTM Hub Panel (Sydney / Brisbane / Adelaide) ─────────────────────────────
+function SttmPanel({ sttm, hub, gbbDate }: { sttm: SttmDay[]; hub: SttmHub; gbbDate: string }) {
+  const colour  = STTM_HUB_COLOURS[hub]
+  const hubName = STTM_HUB_LABELS[hub]
+  const latest  = sttm[sttm.length - 1]
+  const gbbRow  = sttm.find(d => d.gasDate === gbbDate)
 
   const chartData = sttm.map(d => ({
     label:   d.label,
@@ -204,14 +215,14 @@ function SttmPanel({ sttm, gbbDate }: { sttm: SttmDay[]; gbbDate: string }) {
   }))
 
   const allPrices = sttm.map(d => d.price).filter((v): v is number => v !== null)
-  const minP = Math.floor(Math.min(...allPrices) - 0.5)
-  const maxP = Math.ceil(Math.max(...allPrices) + 0.5)
+  const minP = allPrices.length ? Math.floor(Math.min(...allPrices) - 0.5) : 0
+  const maxP = allPrices.length ? Math.ceil(Math.max(...allPrices) + 0.5)  : 20
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', marginBottom: '0.85rem' }}>
         <h3 style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: '#111009' }}>
-          STTM — Sydney Hub
+          STTM — {hubName} Hub
         </h3>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: '#5A5448' }}>
           Ex-post imbalance price · $/GJ · GST exclusive
@@ -224,7 +235,7 @@ function SttmPanel({ sttm, gbbDate }: { sttm: SttmDay[]; gbbDate: string }) {
             label={`Latest (${latest.label})`}
             value={`$${latest.price?.toFixed(4) ?? '—'}`}
             sub="Ex-post imbalance price"
-            colour={STTM_COLOUR}
+            colour={colour}
           />
         )}
         {gbbRow && (
@@ -235,13 +246,12 @@ function SttmPanel({ sttm, gbbDate }: { sttm: SttmDay[]; gbbDate: string }) {
             colour={HILIGHT_CLR}
           />
         )}
-
       </div>
 
-      {/* HTML legend — in normal doc flow, never overlaps */}
+      {/* HTML legend */}
       <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem 1rem', padding:'0.5rem 0', marginBottom:'0.5rem', borderBottom:'1px solid var(--border)' }}>
         <span style={{ display:'flex', alignItems:'center', gap:'0.35rem', fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'#333' }}>
-          <span style={{ display:'inline-block', width:20, height:3, background:STTM_COLOUR, borderRadius:2, flexShrink:0 }} />
+          <span style={{ display:'inline-block', width:20, height:3, background:colour, borderRadius:2, flexShrink:0 }} />
           Ex-Post Price
         </span>
       </div>
@@ -257,9 +267,9 @@ function SttmPanel({ sttm, gbbDate }: { sttm: SttmDay[]; gbbDate: string }) {
             tickFormatter={v => `$${v}`} />
           <Tooltip content={<PriceTooltip />} />
           <Area dataKey="Ex-Post Price" type="monotone"
-            stroke={STTM_COLOUR} strokeWidth={2.5}
-            fill={STTM_COLOUR} fillOpacity={0.12}
-            dot={{ r: 4, fill: STTM_COLOUR }} name="Ex-Post Price" />
+            stroke={colour} strokeWidth={2.5}
+            fill={colour} fillOpacity={0.12}
+            dot={{ r: 4, fill: colour }} name="Ex-Post Price" />
           {gbbRow && (
             <ReferenceLine x={gbbRow.label} stroke={HILIGHT_CLR} strokeWidth={2} strokeDasharray="4 2"
               label={{ value: 'GBB', position: 'top', fontSize: 9, fill: HILIGHT_CLR, fontFamily: 'var(--font-data)' }} />
@@ -292,6 +302,8 @@ export default function GasPriceDashboard({ gbbMostRecentDate }: { gbbMostRecent
 
   const dwgm:    DwgmDay[] = data?.dwgm    ?? []
   const sttmSyd: SttmDay[] = data?.sttmSyd ?? []
+  const sttmBri: SttmDay[] = data?.sttmBri ?? []
+  const sttmAde: SttmDay[] = data?.sttmAde ?? []
 
   // Use state gbbDate (set from GBB API) or fallback to latest DWGM date
   const effectiveGbbDate = gbbDate || data?.latestDwgmDate || ''
@@ -338,13 +350,23 @@ export default function GasPriceDashboard({ gbbMostRecentDate }: { gbbMostRecent
             <div className="sq-card" style={{ padding: '1.5rem' }}>
               <DwgmPanel dwgm={dwgm} gbbDate={effectiveGbbDate} />
             </div>
-            <div className="sq-card" style={{ padding: '1.5rem' }}>
-              <SttmPanel sttm={sttmSyd} gbbDate={effectiveGbbDate} />
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(340px, 1fr))', gap:'1rem' }}>
+              <div className="sq-card" style={{ padding: '1.5rem' }}>
+                <SttmPanel sttm={sttmSyd} hub="SYD" gbbDate={effectiveGbbDate} />
+              </div>
+              <div className="sq-card" style={{ padding: '1.5rem' }}>
+                <SttmPanel sttm={sttmBri} hub="BRI" gbbDate={effectiveGbbDate} />
+              </div>
+              <div className="sq-card" style={{ padding: '1.5rem' }}>
+                <SttmPanel sttm={sttmAde} hub="ADE" gbbDate={effectiveGbbDate} />
+              </div>
             </div>
 
             <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: '#5A5448' }}>
               DWGM: {dwgm[0]?.label} – {dwgm[dwgm.length-1]?.label} ({dwgm.length} days) ·
-              STTM Sydney: {sttmSyd[0]?.label} – {sttmSyd[sttmSyd.length-1]?.label} ({sttmSyd.length} days)
+              STTM Syd: {sttmSyd[0]?.label} – {sttmSyd[sttmSyd.length-1]?.label} ({sttmSyd.length} days) ·
+              STTM Bri: {sttmBri[0]?.label} – {sttmBri[sttmBri.length-1]?.label} ({sttmBri.length} days) ·
+              STTM Ade: {sttmAde[0]?.label} – {sttmAde[sttmAde.length-1]?.label} ({sttmAde.length} days)
             </div>
           </div>
         )}

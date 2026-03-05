@@ -14,15 +14,19 @@ export interface DwgmDay {
 }
 
 export interface SttmDay {
-  gasDate:    string   // YYYY-MM-DD
-  label:      string
-  price:      number | null   // ex_post_imbalance_price for SYD
+  gasDate: string   // YYYY-MM-DD
+  label:   string
+  price:   number | null
 }
+
+export type SttmHub = 'SYD' | 'BRI' | 'ADE'
 
 export interface GasPriceData {
   dwgm:           DwgmDay[]
   sttmSyd:        SttmDay[]
-  latestDwgmDate: string   // YYYY-MM-DD
+  sttmBri:        SttmDay[]
+  sttmAde:        SttmDay[]
+  latestDwgmDate: string
   latestSttmDate: string
 }
 
@@ -89,39 +93,46 @@ async function fetchDwgm(): Promise<DwgmDay[]> {
     .sort((a, b) => a.gasDate.localeCompare(b.gasDate))
 }
 
-async function fetchSttmSyd(): Promise<SttmDay[]> {
-  const res  = await fetch(STTM_URL, { cache: 'no-store' })
-  const text = await res.text()
-  const rows = parseCsvRows(text)
-
-  // Filter to Sydney only, one row per gas date
-  const sydRows = rows.filter(r => (r['hub_identifier'] ?? '').trim().toUpperCase() === 'SYD')
-
-  // Deduplicate by gasDate (keep latest schedule_identifier if multiple)
-  const byDate = new Map<string, SttmDay>()
-  for (const r of sydRows) {
+function parseSttmHub(rows: Record<string, string>[], hub: string): SttmDay[] {
+  const hubRows = rows.filter(r => (r['hub_identifier'] ?? '').trim().toUpperCase() === hub)
+  const byDate  = new Map<string, { day: SttmDay; schedId: number }>()
+  for (const r of hubRows) {
     const gasDate = parseGasDate(r['gas_date'] ?? '')
     if (!gasDate) continue
+    const schedId = parseInt(r['schedule_identifier'] ?? '0')
     const existing = byDate.get(gasDate)
-    const schedId  = parseInt(r['schedule_identifier'] ?? '0')
-    if (!existing || schedId > parseInt(String(existing.price ?? 0))) {
+    if (!existing || schedId > existing.schedId) {
       byDate.set(gasDate, {
-        gasDate,
-        label: toLabel(gasDate),
-        price: parseNum(r['ex_post_imbalance_price'] ?? ''),
+        day: { gasDate, label: toLabel(gasDate), price: parseNum(r['ex_post_imbalance_price'] ?? '') },
+        schedId,
       })
     }
   }
+  return Array.from(byDate.values()).map(v => v.day).sort((a, b) => a.gasDate.localeCompare(b.gasDate))
+}
 
-  return Array.from(byDate.values()).sort((a, b) => a.gasDate.localeCompare(b.gasDate))
+async function fetchAllSttm(): Promise<{ syd: SttmDay[]; bri: SttmDay[]; ade: SttmDay[] }> {
+  const res  = await fetch(STTM_URL, { cache: 'no-store' })
+  const text = await res.text()
+  const rows = parseCsvRows(text)
+  return {
+    syd: parseSttmHub(rows, 'SYD'),
+    bri: parseSttmHub(rows, 'BRI'),
+    ade: parseSttmHub(rows, 'ADE'),
+  }
 }
 
 export async function getGasPriceData(): Promise<GasPriceData> {
-  const [dwgm, sttmSyd] = await Promise.all([fetchDwgm(), fetchSttmSyd()])
+  const [dwgm, sttm] = await Promise.all([fetchDwgm(), fetchAllSttm()])
+  const latestSttmDate = [sttm.syd, sttm.bri, sttm.ade]
+    .map(a => a[a.length - 1]?.gasDate ?? '')
+    .filter(Boolean).sort().pop() ?? ''
   return {
     dwgm,
-    sttmSyd,
+    sttmSyd: sttm.syd,
+    sttmBri: sttm.bri,
+    sttmAde: sttm.ade,
     latestDwgmDate: dwgm[dwgm.length - 1]?.gasDate ?? '',
-    latestSttmDate: sttmSyd[sttmSyd.length - 1]?.gasDate ?? '',
+    latestSttmDate,
   }
 }
