@@ -97,47 +97,61 @@ function aggregateFacility(unitSeries: Record<string, [string, number][]>, inter
 }
 
 
-// Fueltech IDs per display category — fetched via /data/facilities/NEM?fueltech_id=X
-const FETCH_FUELTECHS: Record<string, string[]> = {
-  Coal:    ['coal_black', 'coal_brown'],
-  Wind:    ['wind', 'wind_offshore'],
-  Solar:   ['solar_utility', 'solar_rooftop'],
-  Gas:     ['gas_ccgt', 'gas_ocgt', 'gas_recip', 'gas_steam', 'gas_wcmg'],
-  Battery: ['battery_discharging'],
-  Imports: ['imports'],
-}
-
 async function fetchFuelMix(region: string, interval: string): Promise<{
   dates: string[]
   series: Record<string, (number | null)[]>
 }> {
+  // Correct API call per docs:
+  // GET /v4/data/network/NEM
+  //   primary_grouping=network_region
+  //   secondary_grouping=fueltech_group   ← groups by fuel tech group
+  //   network_region=NSW1
+  const resp = await apiFetch(`${BASE_URL}/data/network/NEM`, {
+    metrics:           'power',
+    network_region:    region,
+    interval,
+    primary_grouping:  'network_region',
+    secondary_grouping:'fueltech_group',
+  })
+
   const raw: Record<string, Record<string, number>> = {}
 
-  // /data/facilities/NEM?fueltech_id=X is the correct endpoint — same one used
-  // for gas generation, confirmed working. /data/network/NEM ignores fueltech_id.
-  await Promise.all(
-    Object.entries(FETCH_FUELTECHS).map(async ([group, ftIds]) => {
-      await Promise.all(ftIds.map(async ftId => {
-        try {
-          const resp = await apiFetch(`${BASE_URL}/data/facilities/NEM`, {
-            metrics:        'power',
-            network_region: region,
-            interval,
-            fueltech_id:    ftId,
-          })
-          // parseTimeseries returns per-unit series; aggregate them all into one sum
-          const unitSeries = parseTimeseries(resp)
-          if (Object.keys(unitSeries).length === 0) return
-          if (!raw[group]) raw[group] = {}
-          // aggregateFacility sums all units and divides by interval divisor
-          const agg = aggregateFacility(unitSeries, interval)
-          for (const [ts, v] of Object.entries(agg)) {
-            if (v > 0) raw[group][ts] = (raw[group][ts] ?? 0) + v
+  // Response: data[] → each item has results[] → each result has columns.fueltech_group
+  // and data[] of [datetime, value] pairs
+  for (const item of resp.data ?? []) {
+    for (const result of item.results ?? []) {
+      // The fueltech_group label comes from columns
+      const ftGroup: string = result.columns?.fueltech_group ?? ''
+      if (!ftGroup) continue
+
+      // Map OE fueltech_group labels → our display categories
+      const group = ({
+        'coal':            'Coal',
+        'gas':             'Gas',
+        'wind':            'Wind',
+        'solar':           'Solar',
+        'battery_storage': 'Battery',
+        'imports':         'Imports',
+        'pumps':           null,   // exclude
+        'hydro':           null,   // exclude for now
+        'distillate':      null,   // minor
+      } as Record<string, string | null>)[ftGroup.toLowerCase()]
+
+      if (!group) continue
+      if (!raw[group]) raw[group] = {}
+
+      for (const entry of result.data ?? []) {
+        if (Array.isArray(entry) && entry.length === 2) {
+          const ts  = String(entry[0])
+          const val = Number(entry[1])
+          if (!isNaN(val) && val > 0) {
+            const key = toAEST(ts)
+            raw[group][key] = (raw[group][key] ?? 0) + val
           }
-        } catch { /* fueltech absent in this region — skip */ }
-      }))
-    })
-  )
+        }
+      }
+    }
+  }
 
   const allDates = Array.from(
     new Set(Object.values(raw).flatMap(m => Object.keys(m)))
