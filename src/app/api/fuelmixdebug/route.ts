@@ -9,27 +9,28 @@ function getHeaders() {
 }
 
 export async function GET() {
-  try {
-    const url = `${BASE_URL}/data/network/NEM?metrics=power&network_region=NSW1&interval=1h&fueltech_id=coal_black`
-    const res = await fetch(url, { headers: getHeaders(), cache: 'no-store' })
-    const json = await res.json()
-    const d0 = json.data?.[0]
-    return NextResponse.json({
-      url,
-      topKeys: Object.keys(json),
-      dataLen: json.data?.length,
-      item0Keys: d0 ? Object.keys(d0) : [],
-      hasResults: !!d0?.results,
-      hasHistory: !!d0?.history,
-      resultsLen: d0?.results?.length,
-      result0: d0?.results?.[0],
-      histStart: d0?.history?.start,
-      histInterval: d0?.history?.interval,
-      histDataLen: d0?.history?.data?.length,
-      histFirst5: d0?.history?.data?.slice(0,5),
-      raw0: d0,
-    })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  const results: Record<string, any> = {}
+
+  // Test 3 different query approaches with 1d interval (small response)
+  const tests = [
+    { key: 'A_primaryGroupingFueltech', url: `${BASE_URL}/data/network/NEM?metrics=power&network_region=NSW1&interval=1d&primary_grouping=fueltech` },
+    { key: 'B_fueltechIdCoal',          url: `${BASE_URL}/data/network/NEM?metrics=power&network_region=NSW1&interval=1d&fueltech_id=coal_black` },
+    { key: 'C_noFilter',                url: `${BASE_URL}/data/network/NEM?metrics=power&network_region=NSW1&interval=1d` },
+  ]
+
+  for (const { key, url } of tests) {
+    try {
+      const res  = await fetch(url, { headers: getHeaders(), cache: 'no-store' })
+      const json = await res.json()
+
+      // Return the FULL raw response so we can see exactly what comes back
+      results[key] = { url, status: res.status, raw: json }
+    } catch (e: any) {
+      results[key] = { url, error: e.message }
+    }
   }
+
+  return NextResponse.json(results, {
+    headers: { 'Content-Type': 'application/json' }
+  })
 }
