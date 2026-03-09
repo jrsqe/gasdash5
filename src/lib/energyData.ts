@@ -118,29 +118,30 @@ async function fetchFuelMix(region: string, interval: string): Promise<{
 
   // Response: data[] → each item has results[] → each result has columns.fueltech_group
   // and data[] of [datetime, value] pairs
-  // Guard: only process items matching our requested region (API should filter, but be safe)
   for (const item of resp.data ?? []) {
-    const itemRegion: string = (item.columns?.network_region ?? '').toUpperCase()
-    if (itemRegion && itemRegion !== region.toUpperCase()) continue
     for (const result of item.results ?? []) {
-      // The fueltech_group label comes from columns
+      // Guard on result-level region (API returns region in result.columns.region)
+      const resultRegion: string = (result.columns?.region ?? '').toUpperCase()
+      if (resultRegion && resultRegion !== region.toUpperCase()) continue
+      // The fueltech_group label comes from result columns
       const ftGroup: string = result.columns?.fueltech_group ?? ''
       if (!ftGroup) continue
 
       // Map OE fueltech_group labels → our display categories
-      // battery_storage is net (discharge only); battery_charging is separate — exclude
-      // to avoid double-counting
+      // Actual API keys confirmed from /api/fuelmixdebug response
       const group = ({
-        'coal':             'Coal',
-        'gas':              'Gas',
-        'wind':             'Wind',
-        'solar':            'Solar',
-        'battery_storage':  'Battery',
-        'battery_charging': null,   // exclude — already netted in battery_storage
-        'hydro':            'Hydro',
-        'imports':          'Imports',
-        'pumps':            null,   // exclude pumped hydro
-        'distillate':       null,   // minor
+        'coal':                 'Coal',
+        'gas':                  'Gas',
+        'wind':                 'Wind',
+        'solar':                'Solar',
+        'battery_discharging':  'Battery',  // positive MW discharge only
+        'battery':              null,        // net (negative when charging) — skip
+        'battery_charging':     null,        // charging draw — skip
+        'hydro':                'Hydro',
+        'bioenergy':            null,        // minor
+        'pumps':                null,        // exclude pumped hydro
+        'distillate':           null,        // minor
+        'imports':              'Imports',
       } as Record<string, string | null>)[ftGroup.toLowerCase()]
 
       if (!group) continue
