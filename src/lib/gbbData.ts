@@ -507,3 +507,52 @@ export async function getGbbData(): Promise<GbbTimeseries> {
     pipelineFlows,
   }
 }
+
+// ── LNG Export data ────────────────────────────────────────────────────────────
+
+export interface LngDay {
+  date:         string          // YYYY-MM-DD
+  facility:     string          // e.g. "GLNG", "APLNG", "QCLNG", "Arrow LNG"
+  state:        string
+  demand:       number          // TJ/day
+}
+
+export interface LngData {
+  // All daily rows, full history
+  daily:        LngDay[]
+  // Unique facility names
+  facilities:   string[]
+  // Monthly aggregates: { "2024-03": { total: number, byFacility: Record<string, number> } }
+  monthly:      Record<string, { total: number; byFacility: Record<string, number> }>
+}
+
+export async function getLngData(): Promise<LngData> {
+  const csvText = await fetchCsvText()
+  const allRows = parseCsv(csvText)
+
+  // Filter to LNGEXPORT only
+  const lngRows = allRows
+    .filter(r => r.FacilityType === 'LNGEXPORT' && r.Demand != null && r.Demand > 0)
+    .sort((a, b) => a.GasDate.localeCompare(b.GasDate))
+
+  const daily: LngDay[] = lngRows.map(r => ({
+    date:     r.GasDate,
+    facility: r.FacilityName,
+    state:    r.State,
+    demand:   r.Demand ?? 0,
+  }))
+
+  const facilities = Array.from(new Set(daily.map(d => d.facility))).sort()
+
+  // Build monthly aggregates
+  const monthly: LngData['monthly'] = {}
+  for (const row of daily) {
+    const month = row.date.slice(0, 7)   // "YYYY-MM"
+    if (!monthly[month]) monthly[month] = { total: 0, byFacility: {} }
+    monthly[month].total += row.demand
+    monthly[month].byFacility[row.facility] =
+      (monthly[month].byFacility[row.facility] ?? 0) + row.demand
+  }
+
+  return { daily, facilities, monthly }
+}
