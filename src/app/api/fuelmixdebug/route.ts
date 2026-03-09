@@ -3,16 +3,19 @@ import { NextResponse } from 'next/server'
 const BASE_URL = 'https://api.openelectricity.org.au/v4'
 
 async function apiFetch(url: string, params: Record<string, string>) {
-  const qs  = new URLSearchParams(params).toString()
-  const res = await fetch(`${url}?${qs}`, {
-    headers: { 'Authorization': `Bearer ${process.env.OE_API_KEY}` },
+  const token = process.env.OE_API_TOKEN ?? ''
+  const qs  = '?' + new URLSearchParams(params).toString()
+  const res = await fetch(`${url}${qs}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
     cache: 'no-store',
   })
-  return res.json()
+  const text = await res.text()
+  return { status: res.status, text }
 }
 
 export async function GET() {
-  const resp = await apiFetch(`${BASE_URL}/data/network/NEM`, {
+  // Test 1: same call as fetchFuelMix
+  const { status, text } = await apiFetch(`${BASE_URL}/data/network/NEM`, {
     metrics:            'power',
     network_region:     'NSW1',
     interval:           '1h',
@@ -20,21 +23,31 @@ export async function GET() {
     secondary_grouping: 'fueltech_group',
   })
 
-  // Summarise structure: for each item show columns + fueltech_groups found + sample values
-  const summary = (resp.data ?? []).map((item: any) => ({
-    item_columns:    item.columns,
-    result_count:    item.results?.length,
-    fueltechs:       item.results?.map((r: any) => ({
-      columns:       r.columns,
-      data_length:   r.data?.length,
-      first_3_rows:  r.data?.slice(0, 3),
-      last_row:      r.data?.slice(-1)[0],
-      // Check for negative values
-      has_negatives: r.data?.some((d: any) => Array.isArray(d) && d[1] < 0),
-      min_val:       r.data?.reduce((m: number, d: any) => Array.isArray(d) ? Math.min(m, d[1]) : m, Infinity),
-      max_val:       r.data?.reduce((m: number, d: any) => Array.isArray(d) ? Math.max(m, d[1]) : m, -Infinity),
-    })),
-  }))
+  let parsed: any = null
+  try { parsed = JSON.parse(text) } catch {}
 
-  return NextResponse.json({ item_count: resp.data?.length, summary })
+  const topKeys      = parsed ? Object.keys(parsed) : []
+  const dataLen      = parsed?.data?.length ?? 'n/a'
+  const firstItem    = parsed?.data?.[0]
+  const firstItemKeys = firstItem ? Object.keys(firstItem) : []
+  const resultsLen   = firstItem?.results?.length ?? 'n/a'
+  const firstResult  = firstItem?.results?.[0]
+
+  return NextResponse.json({
+    http_status:      status,
+    top_keys:         topKeys,
+    data_length:      dataLen,
+    first_item_keys:  firstItemKeys,
+    first_item_cols:  firstItem?.columns,
+    results_count:    resultsLen,
+    first_result:     firstResult ? {
+      columns:        firstResult.columns,
+      data_length:    firstResult.data?.length,
+      first_3:        firstResult.data?.slice(0, 3),
+    } : null,
+    // all fueltech_group values present
+    all_fueltechs:    firstItem?.results?.map((r: any) => r.columns?.fueltech_group),
+    // raw snippet if parsing failed
+    raw_snippet:      parsed ? undefined : text.slice(0, 500),
+  })
 }
