@@ -17,11 +17,12 @@ const FACILITY_COLOURS = [
 ]
 const PRICE_COLOUR = '#FF375F'
 
-const FUEL_MIX_ORDER  = ['Coal','Gas','Wind','Solar','Battery','Imports'] as const
+const FUEL_MIX_ORDER  = ['Coal','Gas','Hydro','Wind','Solar','Battery','Imports'] as const
 type FuelCategory = typeof FUEL_MIX_ORDER[number]
 const FUEL_MIX_COLOURS: Record<FuelCategory, string> = {
-  Coal:    '#8E8E93',   // Apple grey — neutral "dirty"
+  Coal:    '#8E8E93',   // Apple grey
   Gas:     '#0071E3',   // Apple blue
+  Hydro:   '#5AC8FA',   // Apple light blue
   Wind:    '#30C254',   // Apple green
   Solar:   '#FF9F0A',   // Apple amber
   Battery: '#AF52DE',   // Apple purple

@@ -2,7 +2,7 @@ const BASE_URL = 'https://api.openelectricity.org.au/v4'
 const GAS_FUELTECHS = new Set(['gas_ccgt', 'gas_ocgt', 'gas_recip', 'gas_steam', 'gas_wcmg'])
 const REGIONS = ['NSW1', 'VIC1', 'QLD1', 'SA1']
 
-const FUEL_MIX_ORDER = ['Coal','Gas','Wind','Solar','Battery','Imports']
+const FUEL_MIX_ORDER = ['Coal','Gas','Hydro','Wind','Solar','Battery','Imports']
 
 
 const FIVE_MIN_PERIODS: Record<string, number> = {
@@ -126,15 +126,16 @@ async function fetchFuelMix(region: string, interval: string): Promise<{
 
       // Map OE fueltech_group labels → our display categories
       const group = ({
-        'coal':            'Coal',
-        'gas':             'Gas',
-        'wind':            'Wind',
-        'solar':           'Solar',
-        'battery_storage': 'Battery',
-        'imports':         'Imports',
-        'pumps':           null,   // exclude
-        'hydro':           null,   // exclude for now
-        'distillate':      null,   // minor
+        'coal':             'Coal',
+        'gas':              'Gas',
+        'wind':             'Wind',
+        'solar':            'Solar',
+        'battery_storage':  'Battery',
+        'battery_charging': 'Battery',  // same series — charging is negative
+        'hydro':            'Hydro',
+        'imports':          'Imports',
+        'pumps':            null,   // exclude pumped hydro (counted in hydro)
+        'distillate':       null,   // minor
       } as Record<string, string | null>)[ftGroup.toLowerCase()]
 
       if (!group) continue
@@ -144,7 +145,7 @@ async function fetchFuelMix(region: string, interval: string): Promise<{
         if (Array.isArray(entry) && entry.length === 2) {
           const ts  = String(entry[0])
           const val = Number(entry[1])
-          if (!isNaN(val) && val > 0) {
+          if (!isNaN(val)) {
             const key = toAEST(ts)
             raw[group][key] = (raw[group][key] ?? 0) + val
           }
