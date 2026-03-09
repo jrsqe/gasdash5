@@ -118,23 +118,28 @@ async function fetchFuelMix(region: string, interval: string): Promise<{
 
   // Response: data[] → each item has results[] → each result has columns.fueltech_group
   // and data[] of [datetime, value] pairs
+  // Guard: only process items matching our requested region (API should filter, but be safe)
   for (const item of resp.data ?? []) {
+    const itemRegion: string = (item.columns?.network_region ?? '').toUpperCase()
+    if (itemRegion && itemRegion !== region.toUpperCase()) continue
     for (const result of item.results ?? []) {
       // The fueltech_group label comes from columns
       const ftGroup: string = result.columns?.fueltech_group ?? ''
       if (!ftGroup) continue
 
       // Map OE fueltech_group labels → our display categories
+      // battery_storage is net (discharge only); battery_charging is separate — exclude
+      // to avoid double-counting
       const group = ({
         'coal':             'Coal',
         'gas':              'Gas',
         'wind':             'Wind',
         'solar':            'Solar',
         'battery_storage':  'Battery',
-        'battery_charging': 'Battery',  // same series — charging is negative
+        'battery_charging': null,   // exclude — already netted in battery_storage
         'hydro':            'Hydro',
         'imports':          'Imports',
-        'pumps':            null,   // exclude pumped hydro (counted in hydro)
+        'pumps':            null,   // exclude pumped hydro
         'distillate':       null,   // minor
       } as Record<string, string | null>)[ftGroup.toLowerCase()]
 
@@ -145,7 +150,7 @@ async function fetchFuelMix(region: string, interval: string): Promise<{
         if (Array.isArray(entry) && entry.length === 2) {
           const ts  = String(entry[0])
           const val = Number(entry[1])
-          if (!isNaN(val)) {
+          if (!isNaN(val) && val >= 0) {
             const key = toAEST(ts)
             raw[group][key] = (raw[group][key] ?? 0) + val
           }
