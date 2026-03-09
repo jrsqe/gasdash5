@@ -335,7 +335,8 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
       const total = present.reduce((s, f) => s + (series[f]?.[gi] ?? 0), 0)
       row.__total = total
       for (const f of present) {
-        row[f] = series[f]?.[gi] ?? 0   // 0 not null — nulls break stacked areas
+        const v = series[f]?.[gi] ?? 0
+        row[f] = (f === 'Battery' && v < 0) ? 0 : v  // clamp battery charging (negative) to 0
       }
       return row
     })
@@ -437,7 +438,9 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
                 <div style={{ background:'#fff', border:'1px solid #D4D0C8', borderRadius:6,
                   padding:'0.6rem 0.85rem', fontFamily:'var(--font-data)', fontSize:'0.72rem',
                   boxShadow:'0 4px 16px rgba(0,0,0,0.08)', minWidth:160 }}>
-                  <div style={{ fontWeight:700, color:'#1A1814', marginBottom:'0.35rem' }}>{label?.split(' ')[0]}</div>
+                  <div style={{ fontWeight:700, color:'#1A1814', marginBottom:'0.35rem' }}>
+                    {label?.split(' ')[0]} <span style={{ fontWeight:400, color:'#888' }}>{label?.split(' ')[1]}</span>
+                  </div>
                   {payload.slice().reverse().map((p: any) => {
                     if (p.value == null) return null
                     const total = p.payload?.__total ?? 0
