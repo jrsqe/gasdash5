@@ -335,7 +335,7 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
       const total = present.reduce((s, f) => s + (series[f]?.[gi] ?? 0), 0)
       row.__total = total
       for (const f of present) {
-        row[f] = series[f]?.[gi] ?? null
+        row[f] = series[f]?.[gi] ?? 0   // 0 not null — nulls break stacked areas
       }
       return row
     })
