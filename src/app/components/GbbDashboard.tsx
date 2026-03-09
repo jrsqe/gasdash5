@@ -105,8 +105,10 @@ function useWindow(dates: string[], dateRange: DateRangeOption) {
 
 // Trim a dates array to only the span that has actual data across all series.
 // seriesArrays: array of (number|null)[] aligned to dates.
-function trimDates(dates: string[], seriesArrays: (number|null)[][]): string[] {
-  if (!dates.length || !seriesArrays.length) return dates
+// Returns trimmed dates AND the offset into the original array,
+// so series[offset + i] stays correctly aligned.
+function trimDates(dates: string[], seriesArrays: (number|null)[][]): { dates: string[]; offset: number } {
+  if (!dates.length || !seriesArrays.length) return { dates, offset: 0 }
   let first = dates.length, last = -1
   for (const arr of seriesArrays) {
     for (let i = 0; i < arr.length; i++) {
@@ -116,8 +118,8 @@ function trimDates(dates: string[], seriesArrays: (number|null)[][]): string[] {
       }
     }
   }
-  if (last < 0) return dates
-  return dates.slice(first, last + 1)
+  if (last < 0) return { dates, offset: 0 }
+  return { dates: dates.slice(first, last + 1), offset: first }
 }
 
 // ── Shared atoms ──────────────────────────────────────────────────────────────
@@ -353,7 +355,7 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
   const [range, setRange] = useState<DateRangeOption>('all')
 
   // Trim dates to only span with actual data for this panel
-  const trimmedDates = useMemo(() => {
+  const { dates: trimmedDates, offset: trimOffset } = useMemo(() => {
     const st  = activeData[state] ?? {}
     const arrs = Object.values(st) as (number|null)[][]
     return trimDates(dates, arrs)
@@ -370,9 +372,9 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
   const facilities = Object.keys(activeData[state] ?? {})
   const series     = activeData[state] ?? {}
 
-  // Daily rows
+  // Daily rows — gi must account for trimOffset to index correctly into full series arrays
   const dailyRows = sliced.map((d,i) => {
-    const gi = sliceStart+i
+    const gi = trimOffset + sliceStart + i
     return { date: fmtD(d), ...Object.fromEntries(facilities.map(f => [f, series[f]?.[gi] ?? null])) }
   })
 
@@ -380,7 +382,7 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
   const monthlyRows = useMemo(() => {
     const byMonth: Record<string, Record<string, number>> = {}
     sliced.forEach((d, i) => {
-      const gi    = sliceStart + i
+      const gi    = trimOffset + sliceStart + i
       const month = d.slice(0, 7)   // "YYYY-MM"
       if (!byMonth[month]) byMonth[month] = {}
       for (const f of facilities) {
@@ -508,7 +510,7 @@ function StoragePanel({ dates, storageByFacility }: {
   const [metric, setMetric] = useState<'level'|'flow'>('level')
   const [range,  setRange]  = useState<DateRangeOption>('all')
 
-  const trimmedDates = useMemo(() => {
+  const { dates: trimmedDates, offset: trimOffset } = useMemo(() => {
     const sf = facilities.filter(f => stateOf(f) === state)
     const arrs = sf.flatMap(f => [
       storageByFacility[f].heldInStorage,
@@ -523,11 +525,11 @@ function StoragePanel({ dates, storageByFacility }: {
   const sf = facilities.filter(f => stateOf(f) === state)
 
   const levelRows = sliced.map((d,i) => {
-    const gi = sliceStart+i
+    const gi = trimOffset + sliceStart+i
     return { date:fmtD(d), ...Object.fromEntries(sf.map(f => [f, storageByFacility[f].heldInStorage[gi] ?? null])) }
   })
   const flowRows = sliced.map((d,i) => {
-    const gi = sliceStart+i
+    const gi = trimOffset + sliceStart+i
     const row: Record<string,any> = { date:fmtD(d) }
     sf.forEach(f => {
       row[`${f} inject`]    = storageByFacility[f].demand[gi]  ?? null
@@ -605,7 +607,7 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
   const [showFilter, setShowFilter] = useState(false)
   const [selected,   setSelected]   = useState<Set<string>>(new Set())
 
-  const trimmedDates = useMemo(() => {
+  const { dates: trimmedDates, offset: trimOffset } = useMemo(() => {
     const arrs = Object.values(prodByState[state] ?? {}) as (number|null)[][]
     return trimDates(dates, arrs)
   }, [dates, prodByState, state])
@@ -621,7 +623,7 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
 
   // Daily rows
   const dailyRows = sliced.map((d,i) => {
-    const gi = sliceStart+i
+    const gi = trimOffset + sliceStart+i
     return { date:fmtD(d), ...Object.fromEntries(active.map(f => [f, series[f]?.[gi] ?? null])) }
   })
 
@@ -629,7 +631,7 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
   const monthlyRows = useMemo(() => {
     const byMonth: Record<string, Record<string, number>> = {}
     sliced.forEach((d, i) => {
-      const gi    = sliceStart + i
+      const gi    = trimOffset + sliceStart + i
       const month = d.slice(0, 7)
       if (!byMonth[month]) byMonth[month] = {}
       for (const f of active) {
@@ -756,7 +758,7 @@ function PipelinePanel({ dates, pipelineFlows }: {
   const [showFilter,   setShowFilter]   = useState(false)
   const [hiddenPipes,  setHiddenPipes]  = useState<Set<string>>(new Set())
 
-  const trimmedDates = useMemo(() => {
+  const { dates: trimmedDates, offset: trimOffset } = useMemo(() => {
     const arrs = pipelines.map(p => pipelineFlows[p]?.flow ?? [])
     return trimDates(dates, arrs)
   }, [dates, pipelines, pipelineFlows])
@@ -773,7 +775,7 @@ function PipelinePanel({ dates, pipelineFlows }: {
   })
 
   const chartRows = sliced.map((d,i) => {
-    const gi = sliceStart+i
+    const gi = trimOffset + sliceStart+i
     return { date:fmtD(d), ...Object.fromEntries(visiblePipes.map(p => [p, pipelineFlows[p]?.flow[gi] ?? null])) }
   })
 
@@ -938,7 +940,7 @@ function PipelinePanel({ dates, pipelineFlows }: {
       {/* Nameplate utilisation chart */}
       {visiblePipes.some(p => pipelineFlows[p]?.nameplateCapacity != null) && (() => {
         const utilRows = sliced.map((d, i) => {
-          const gi = sliceStart + i
+          const gi = trimOffset + sliceStart + i
           const row: Record<string, any> = { date: fmtD(d) }
           visiblePipes.forEach(p => {
             const cap = pipelineFlows[p]?.nameplateCapacity
