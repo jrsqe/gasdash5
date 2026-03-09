@@ -159,10 +159,20 @@ async function fetchFuelMix(region: string, interval: string): Promise<{
     }
   }
 
+  // Divide accumulated MWh totals by number of 5-min periods to get MW
+  const divisor = FIVE_MIN_PERIODS[interval] ?? 1
+  for (const grp of Object.keys(raw)) {
+    for (const dt of Object.keys(raw[grp])) {
+      raw[grp][dt] = raw[grp][dt] / divisor
+    }
+  }
+
   const allDates = Array.from(
     new Set(Object.values(raw).flatMap(m => Object.keys(m)))
   ).sort()
 
+  // battery_storage from OE is discharge power — include even if values are small
+  // battery_charging is excluded (mapped to null) to avoid double-counting
   const series: Record<string, (number | null)[]> = {}
   for (const grp of FUEL_MIX_ORDER) {
     if (raw[grp] && Object.keys(raw[grp]).length > 0) {

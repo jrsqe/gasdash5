@@ -315,7 +315,8 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
   onDateRangeChange: (v: DateRangeOption) => void
 }) {
   const { dates, series } = fuelMix
-  const present = FUEL_MIX_ORDER.filter(f => series[f])
+  // Show a fuel if its series exists AND has at least one positive value
+  const present = FUEL_MIX_ORDER.filter(f => series[f]?.some(v => v != null && v > 0))
 
   // Window slicing — keep in sync with RegionPanel via shared dateRange/windowSize props
   const [windowEnd, setWindowEnd] = useState(dates.length - 1)
