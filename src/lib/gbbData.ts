@@ -373,11 +373,11 @@ export async function getGbbData(): Promise<GbbTimeseries> {
 
   if (allRows.length === 0) throw new Error('GBB CSV parsed 0 rows')
 
-  // Only keep the last 31 days to match the dashboard window
+  // Keep all historical data
   const allDates    = Array.from(new Set(allRows.map(r => r.GasDate))).sort()
-  const recentDates = allDates.slice(-365)
+  const recentDates = allDates   // full history
   const mostRecentGasDate = recentDates[recentDates.length - 1] // YYYY-MM-DD
-  const rows = allRows.filter(r => recentDates.includes(r.GasDate))
+  const rows = allRows
 
   // Helper: get or create array
   const ensureArr = (obj: Record<string, any>, key: string, len: number) => {

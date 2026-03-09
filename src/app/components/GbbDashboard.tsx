@@ -319,12 +319,15 @@ function ChartLegend({ items }: { items: { label: string; colour: string; dash?:
 // ── GPG Panel ─────────────────────────────────────────────────────────────────
 type DemandType = 'gpg' | 'large'
 
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
 function GpgPanel({ dates, gpgByState, largeByState }: {
   dates: string[]
   gpgByState:   Record<string, Record<string,(number|null)[]>>
   largeByState: Record<string, Record<string,(number|null)[]>>
 }) {
   const [demandType, setDemandType] = useState<DemandType>('gpg')
+  const [viewMode,   setViewMode]   = useState<'daily'|'monthly'>('daily')
   const activeData = demandType === 'gpg' ? gpgByState : largeByState
   const states     = Object.keys(activeData).sort()
   const [state, setState] = useState(states[0] ?? 'NSW')
@@ -333,7 +336,6 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
 
   useEffect(() => {
     const s = Object.keys(activeData).sort()
-    // Default to NSW if available, otherwise first state
     const preferred = s.includes('NSW') ? 'NSW' : (s[0] ?? '')
     setState(preferred)
   }, [demandType])
@@ -341,13 +343,39 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
   const facilities = Object.keys(activeData[state] ?? {})
   const series     = activeData[state] ?? {}
 
-  const rows = sliced.map((d,i) => {
+  // Daily rows
+  const dailyRows = sliced.map((d,i) => {
     const gi = sliceStart+i
     return { date: fmtD(d), ...Object.fromEntries(facilities.map(f => [f, series[f]?.[gi] ?? null])) }
   })
 
-  const title    = demandType === 'gpg' ? 'GPG Gas Demand' : 'Large Industry Gas Demand'
-  const csvName  = demandType === 'gpg' ? `gpg-demand-${state}.csv` : `large-industry-demand-${state}.csv`
+  // Monthly aggregated rows — sum daily TJ into calendar months
+  const monthlyRows = useMemo(() => {
+    const byMonth: Record<string, Record<string, number>> = {}
+    sliced.forEach((d, i) => {
+      const gi    = sliceStart + i
+      const month = d.slice(0, 7)   // "YYYY-MM"
+      if (!byMonth[month]) byMonth[month] = {}
+      for (const f of facilities) {
+        const v = series[f]?.[gi] ?? 0
+        byMonth[month][f] = (byMonth[month][f] ?? 0) + (v ?? 0)
+      }
+    })
+    return Object.entries(byMonth)
+      .sort(([a],[b]) => a.localeCompare(b))
+      .map(([ym, vals]) => {
+        const [y, m] = ym.split('-')
+        const label  = `${MONTHS_SHORT[parseInt(m??'1')-1]} ${(y??'').slice(2)}`
+        const total  = facilities.reduce((s,f) => s + (vals[f] ?? 0), 0)
+        return { date: label, ym, total, ...Object.fromEntries(facilities.map(f => [f, vals[f] ?? 0])) }
+      })
+  }, [sliced, sliceStart, series, facilities])
+
+  const title   = demandType === 'gpg' ? 'GPG Gas Demand' : 'Large Industry Gas Demand'
+  const csvName = viewMode === 'monthly'
+    ? (demandType === 'gpg' ? `gpg-demand-monthly-${state}.csv` : `large-industry-demand-monthly-${state}.csv`)
+    : (demandType === 'gpg' ? `gpg-demand-${state}.csv` : `large-industry-demand-${state}.csv`)
+  const csvRows = viewMode === 'monthly' ? monthlyRows : dailyRows
 
   const DEMAND_TABS: { value: DemandType; label: string }[] = [
     { value: 'gpg',   label: 'Gas Power Generation' },
@@ -357,12 +385,21 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
   return (
     <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
       {/* Title row */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1rem' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
         <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
           <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>{title}</h3>
-          <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
+          <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>
+            {viewMode === 'monthly' ? 'TJ/month' : 'TJ/day'}
+          </span>
         </div>
-        <CsvButton onClick={() => downloadCsv(rows, csvName)} />
+        <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
+          {/* Daily / Monthly toggle */}
+          <PillGroup
+            options={[{value:'daily',label:'Daily'},{value:'monthly',label:'Monthly'}] as {value:'daily'|'monthly';label:string}[]}
+            value={viewMode} onChange={setViewMode}
+          />
+          <CsvButton onClick={() => downloadCsv(csvRows, csvName)} />
+        </div>
       </div>
 
       {/* Demand type tabs */}
@@ -382,18 +419,36 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
         })}
       </div>
 
-      {/* State tabs — only if multiple states available */}
+      {/* State tabs */}
       {states.length > 1 && <StateTabs states={states} active={state} onChange={setState} />}
 
       {facilities.length === 0 ? (
         <div style={{ padding:'2rem', textAlign:'center', color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.75rem' }}>
           No data available for {state}
         </div>
+      ) : viewMode === 'monthly' ? (
+        <>
+          <ChartLegend items={facilities.map((f,i) => ({ label: f, colour: PALETTE[i%PALETTE.length] }))} />
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={monthlyRows} margin={CHART_MARGIN} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="date" {...XAXIS_PROPS}
+                interval={Math.max(0, Math.floor(monthlyRows.length / 14) - 1)}
+              />
+              <YAxis {...YAXIS_PROPS} tickFormatter={v => fmt0(v)} />
+              <Tooltip content={<SqTooltip unit="TJ" />} />
+              {facilities.map((f,i) => (
+                <Bar key={f} dataKey={f} stackId="m" fill={PALETTE[i%PALETTE.length]}
+                  radius={i === facilities.length-1 ? [2,2,0,0] : [0,0,0,0]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </>
       ) : (
         <>
           <ChartLegend items={facilities.map((f,i) => ({ label: f, colour: PALETTE[i%PALETTE.length] }))} />
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={rows} margin={CHART_MARGIN}>
+            <BarChart data={dailyRows} margin={CHART_MARGIN}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
               <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
               <YAxis {...YAXIS_PROPS} />
@@ -407,8 +462,11 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
         </>
       )}
 
-      <RangeControls dates={dates} dateRange={range} onChange={setRange}
-        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
+      {/* Range controls only in daily view */}
+      {viewMode === 'daily' && (
+        <RangeControls dates={dates} dateRange={range} onChange={setRange}
+          sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
+      )}
     </div>
   )
 }
