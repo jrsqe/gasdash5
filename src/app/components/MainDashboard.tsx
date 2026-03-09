@@ -7,6 +7,7 @@ const ElectricityDashboard  = dynamic(() => import('./DashboardClient'),       {
 const GbbDashboard          = dynamic(() => import('./GbbDashboard'),          { ssr: false })
 const GpgProfileDashboard   = dynamic(() => import('./GpgProfileDashboard'),   { ssr: false })
 const GasPriceDashboard     = dynamic(() => import('./GasPriceDashboard'),     { ssr: false })
+const LngDashboard          = dynamic(() => import('./LngDashboard'),          { ssr: false })
 
 type TopTab = 'electricity' | 'gas' | 'gpg-profile' | 'gas-prices' | 'lng'
 
