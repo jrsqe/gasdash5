@@ -74,18 +74,20 @@ function lastVal(arr: (number|null)[]): number|null {
   return null
 }
 
-type DateRangeOption = 'all'|'90d'|'30d'|'7d'
+type DateRangeOption = 'all'|'1y'|'90d'|'30d'|'7d'|'3d'
 const DATE_RANGE_OPTIONS: {value: DateRangeOption; label: string}[] = [
-  { value:'all',  label:'All'    },
-  { value:'90d',  label:'90 days' },
-  { value:'30d',  label:'30 days' },
-  { value:'7d',   label:'7 days'  },
+  { value:'all',  label:'All'   },
+  { value:'1y',   label:'1 year' },
+  { value:'90d',  label:'90d'   },
+  { value:'30d',  label:'30d'   },
+  { value:'7d',   label:'7d'    },
+  { value:'3d',   label:'3d'    },
 ]
 
 function useWindow(dates: string[], dateRange: DateRangeOption) {
   const windowSize = useMemo(() => {
     if (dateRange === 'all' || !dates.length) return dates.length
-    const d = dateRange === '90d' ? 90 : dateRange === '30d' ? 30 : 7
+    const d = dateRange === '1y' ? 365 : dateRange === '90d' ? 90 : dateRange === '30d' ? 30 : dateRange === '7d' ? 7 : 3
     return Math.min(d, dates.length)
   }, [dateRange, dates])
 
@@ -99,6 +101,23 @@ function useWindow(dates: string[], dateRange: DateRangeOption) {
 
   const sliceStart = dateRange === 'all' ? 0 : Math.max(0, windowEnd - windowSize + 1)
   return { sliced, sliceStart, windowEnd, setWindowEnd, windowSize }
+}
+
+// Trim a dates array to only the span that has actual data across all series.
+// seriesArrays: array of (number|null)[] aligned to dates.
+function trimDates(dates: string[], seriesArrays: (number|null)[][]): string[] {
+  if (!dates.length || !seriesArrays.length) return dates
+  let first = dates.length, last = -1
+  for (const arr of seriesArrays) {
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] != null && arr[i] !== 0) {
+        if (i < first) first = i
+        if (i > last)  last  = i
+      }
+    }
+  }
+  if (last < 0) return dates
+  return dates.slice(first, last + 1)
 }
 
 // ── Shared atoms ──────────────────────────────────────────────────────────────
@@ -332,7 +351,15 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
   const states     = Object.keys(activeData).sort()
   const [state, setState] = useState(states[0] ?? 'NSW')
   const [range, setRange] = useState<DateRangeOption>('all')
-  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(dates, range)
+
+  // Trim dates to only span with actual data for this panel
+  const trimmedDates = useMemo(() => {
+    const st  = activeData[state] ?? {}
+    const arrs = Object.values(st) as (number|null)[][]
+    return trimDates(dates, arrs)
+  }, [dates, activeData, state])
+
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range)
 
   useEffect(() => {
     const s = Object.keys(activeData).sort()
@@ -462,11 +489,9 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
         </>
       )}
 
-      {/* Range controls only in daily view */}
-      {viewMode === 'daily' && (
-        <RangeControls dates={dates} dateRange={range} onChange={setRange}
-          sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
-      )}
+      {/* Range controls — always visible, drives both daily and monthly views */}
+      <RangeControls dates={trimmedDates} dateRange={range} onChange={setRange}
+        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
     </div>
   )
 }
@@ -482,7 +507,18 @@ function StoragePanel({ dates, storageByFacility }: {
   const [state,  setState]  = useState(stateGroups[0] ?? 'VIC')
   const [metric, setMetric] = useState<'level'|'flow'>('level')
   const [range,  setRange]  = useState<DateRangeOption>('all')
-  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(dates, range)
+
+  const trimmedDates = useMemo(() => {
+    const sf = facilities.filter(f => stateOf(f) === state)
+    const arrs = sf.flatMap(f => [
+      storageByFacility[f].heldInStorage,
+      storageByFacility[f].supply,
+      storageByFacility[f].demand,
+    ])
+    return trimDates(dates, arrs)
+  }, [dates, facilities, state, storageByFacility])
+
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range)
 
   const sf = facilities.filter(f => stateOf(f) === state)
 
@@ -552,20 +588,29 @@ function StoragePanel({ dates, storageByFacility }: {
           </ResponsiveContainer>
         </>
       )}
-      <RangeControls dates={dates} dateRange={range} onChange={setRange}
+      <RangeControls dates={trimmedDates} dateRange={range} onChange={setRange}
         sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
     </div>
   )
 }
 
 // ── Production Panel ──────────────────────────────────────────────────────────
+const MONTHS_PROD = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
 function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:Record<string,Record<string,(number|null)[]>> }) {
   const states = Object.keys(prodByState).sort()
-  const [state,  setState]  = useState(states[0] ?? 'VIC')
-  const [range,  setRange]  = useState<DateRangeOption>('all')
+  const [state,     setState]    = useState(states[0] ?? 'VIC')
+  const [range,     setRange]    = useState<DateRangeOption>('all')
+  const [viewMode,  setViewMode] = useState<'daily'|'monthly'>('daily')
   const [showFilter, setShowFilter] = useState(false)
-  const [selected, setSelected]     = useState<Set<string>>(new Set())
-  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(dates, range)
+  const [selected,   setSelected]   = useState<Set<string>>(new Set())
+
+  const trimmedDates = useMemo(() => {
+    const arrs = Object.values(prodByState[state] ?? {}) as (number|null)[][]
+    return trimDates(dates, arrs)
+  }, [dates, prodByState, state])
+
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range)
 
   useEffect(() => { if (!states.includes(state)) setState(states[0] ?? '') }, [states])
   useEffect(() => { setSelected(new Set()) }, [state])
@@ -574,10 +619,34 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
   const active = selected.size > 0 ? allFacilities.filter(f => selected.has(f)) : allFacilities
   const series = prodByState[state] ?? {}
 
-  const rows = sliced.map((d,i) => {
+  // Daily rows
+  const dailyRows = sliced.map((d,i) => {
     const gi = sliceStart+i
     return { date:fmtD(d), ...Object.fromEntries(active.map(f => [f, series[f]?.[gi] ?? null])) }
   })
+
+  // Monthly rows — sum daily TJ into calendar months
+  const monthlyRows = useMemo(() => {
+    const byMonth: Record<string, Record<string, number>> = {}
+    sliced.forEach((d, i) => {
+      const gi    = sliceStart + i
+      const month = d.slice(0, 7)
+      if (!byMonth[month]) byMonth[month] = {}
+      for (const f of active) {
+        byMonth[month][f] = (byMonth[month][f] ?? 0) + (series[f]?.[gi] ?? 0)
+      }
+    })
+    return Object.entries(byMonth)
+      .sort(([a],[b]) => a.localeCompare(b))
+      .map(([ym, vals]) => {
+        const [y, m] = ym.split('-')
+        const label  = `${MONTHS_PROD[parseInt(m??'1')-1]} ${(y??'').slice(2)}`
+        return { date: label, ym, ...Object.fromEntries(active.map(f => [f, vals[f] ?? 0])) }
+      })
+  }, [sliced, sliceStart, series, active])
+
+  const csvRows = viewMode === 'monthly' ? monthlyRows : dailyRows
+  const csvName = viewMode === 'monthly' ? `production-monthly-${state}.csv` : `production-${state}.csv`
 
   const toggle = (f:string) => setSelected(prev => { const n = new Set(prev); n.has(f) ? n.delete(f) : n.add(f); return n })
 
@@ -586,10 +655,16 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
         <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
           <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>Gas Production</h3>
-          <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>TJ/day</span>
+          <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>
+            {viewMode === 'monthly' ? 'TJ/month' : 'TJ/day'}
+          </span>
         </div>
-        <div style={{ display:'flex', gap:'0.4rem' }}>
-          <CsvButton onClick={() => downloadCsv(rows, `production-${state}.csv`)} />
+        <div style={{ display:'flex', gap:'0.4rem', alignItems:'center' }}>
+          <PillGroup
+            options={[{value:'daily',label:'Daily'},{value:'monthly',label:'Monthly'}] as {value:'daily'|'monthly';label:string}[]}
+            value={viewMode} onChange={setViewMode}
+          />
+          <CsvButton onClick={() => downloadCsv(csvRows, csvName)} />
           <button onClick={() => setShowFilter(v => !v)} style={{
             padding:'0.25rem 0.65rem', borderRadius:6,
             border: `1px solid ${showFilter ? 'var(--accent)' : 'var(--border)'}`,
@@ -626,20 +701,39 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
 
       {states.length > 1 && <StateTabs states={states} active={state} onChange={setState} />}
       <ChartLegend items={active.map(f => ({ label: f, colour: PALETTE[allFacilities.indexOf(f) % PALETTE.length] }))} />
-      <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={rows} margin={CHART_MARGIN}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-          <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
-          <YAxis {...YAXIS_PROPS} />
-          <Tooltip content={<SqTooltip unit="TJ" />} />
-          {active.map(f => (
-            <Line key={f} type="monotone" dataKey={f}
-              stroke={PALETTE[allFacilities.indexOf(f) % PALETTE.length]}
-              strokeWidth={1.5} dot={false} connectNulls activeDot={{r:3,strokeWidth:0}} />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-      <RangeControls dates={dates} dateRange={range} onChange={setRange}
+
+      {viewMode === 'monthly' ? (
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={monthlyRows} margin={CHART_MARGIN} barCategoryGap="20%">
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <XAxis dataKey="date" {...XAXIS_PROPS}
+              interval={Math.max(0, Math.floor(monthlyRows.length / 14) - 1)} />
+            <YAxis {...YAXIS_PROPS} tickFormatter={v => fmt0(v)} />
+            <Tooltip content={<SqTooltip unit="TJ" />} />
+            {active.map((f,i) => (
+              <Bar key={f} dataKey={f} stackId="prod"
+                fill={PALETTE[allFacilities.indexOf(f) % PALETTE.length]}
+                radius={i === active.length-1 ? [2,2,0,0] : [0,0,0,0]} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={dailyRows} margin={CHART_MARGIN}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="date" {...XAXIS_PROPS} ticks={smartTicks(sliced.map(fmtD),range).ticks} tickFormatter={smartTicks(sliced.map(fmtD),range).formatter} />
+            <YAxis {...YAXIS_PROPS} />
+            <Tooltip content={<SqTooltip unit="TJ" />} />
+            {active.map(f => (
+              <Line key={f} type="monotone" dataKey={f}
+                stroke={PALETTE[allFacilities.indexOf(f) % PALETTE.length]}
+                strokeWidth={1.5} dot={false} connectNulls activeDot={{r:3,strokeWidth:0}} />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+
+      <RangeControls dates={trimmedDates} dateRange={range} onChange={setRange}
         sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
     </div>
   )
@@ -661,7 +755,13 @@ function PipelinePanel({ dates, pipelineFlows }: {
   const [range,        setRange]        = useState<DateRangeOption>('all')
   const [showFilter,   setShowFilter]   = useState(false)
   const [hiddenPipes,  setHiddenPipes]  = useState<Set<string>>(new Set())
-  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(dates, range)
+
+  const trimmedDates = useMemo(() => {
+    const arrs = pipelines.map(p => pipelineFlows[p]?.flow ?? [])
+    return trimDates(dates, arrs)
+  }, [dates, pipelines, pipelineFlows])
+
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range)
 
   const groupPipes   = groups.find(g => g.label === activeGroup)?.pipes ?? []
   const visiblePipes = groupPipes.filter(p => !hiddenPipes.has(p))
