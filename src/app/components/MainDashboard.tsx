@@ -8,8 +8,9 @@ const GbbDashboard          = dynamic(() => import('./GbbDashboard'),          {
 const GpgProfileDashboard   = dynamic(() => import('./GpgProfileDashboard'),   { ssr: false })
 const GasPriceDashboard     = dynamic(() => import('./GasPriceDashboard'),     { ssr: false })
 const LngDashboard          = dynamic(() => import('./LngDashboard'),          { ssr: false })
+const CustomChartDashboard  = dynamic(() => import('./CustomChartDashboard'),  { ssr: false })
 
-type TopTab = 'electricity' | 'gas' | 'gpg-profile' | 'gas-prices' | 'lng'
+type TopTab = 'electricity' | 'gas' | 'gpg-profile' | 'gas-prices' | 'lng' | 'custom'
 
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 
@@ -124,6 +125,7 @@ export default function MainDashboard() {
           { key: 'gpg-profile', label: 'GPG Generation Profile' },
           { key: 'gas-prices',  label: 'Gas Prices' },
           { key: 'lng',        label: 'LNG Export' },
+          { key: 'custom',    label: 'Custom Chart' },
         ] as { key: TopTab; label: string }[]).map(({ key, label }) => {
           const isActive = tab === key
           return (
@@ -149,6 +151,9 @@ export default function MainDashboard() {
       </div>
       <div style={{ display: tab === 'gpg-profile' ? 'block' : 'none' }}>
         <GpgProfileDashboard />
+      </div>
+      <div style={{ display: tab === 'custom' ? 'block' : 'none' }}>
+        <CustomChartDashboard />
       </div>
       <div style={{ display: tab === 'lng' ? 'block' : 'none' }}>
         <LngDashboard />
