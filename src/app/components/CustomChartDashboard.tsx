@@ -66,6 +66,7 @@ interface AllData {
   gbb:    any
   prices: any
   lng:    any
+  elec:   any   // { dates, series } per region from electricity API
 }
 
 // ── Series catalogue ──────────────────────────────────────────────────────────
@@ -157,7 +158,7 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
     }
   }
 
-  // ── GBB: Storage ──
+  // ── GBB: Storage level, injection & withdrawal ──
   if (gbb?.storageByFacility) {
     for (const [facility, info] of Object.entries(gbb.storageByFacility as Record<string,any>)) {
       defs.push({
@@ -167,6 +168,45 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
         extract: (d) => {
           const v = d.gbb?.storageByFacility?.[facility]?.heldInStorage
           return v ? { dates: d.gbb.dates, values: v } : null
+        },
+      })
+      defs.push({
+        id: `storage-inject|${facility}`,
+        label: `Storage Injection · ${facility} (${info.state})`,
+        unit: 'TJ/day', category: 'Gas Storage', chartType: 'bar', monthlyAgg: 'sum' as const,
+        extract: (d) => {
+          const v = d.gbb?.storageByFacility?.[facility]?.demand   // 'demand' = gas into storage
+          return v ? { dates: d.gbb.dates, values: v } : null
+        },
+      })
+      defs.push({
+        id: `storage-withdraw|${facility}`,
+        label: `Storage Withdrawal · ${facility} (${info.state})`,
+        unit: 'TJ/day', category: 'Gas Storage', chartType: 'bar', monthlyAgg: 'sum' as const,
+        extract: (d) => {
+          const v = d.gbb?.storageByFacility?.[facility]?.supply   // 'supply' = gas out of storage
+          return v ? { dates: d.gbb.dates, values: v } : null
+        },
+      })
+    }
+  }
+
+  // ── GPG generation (MW) from electricity API — daily averages per NEM region ──
+  const NEM_REGIONS: Record<string, string> = {
+    NSW1: 'NSW', VIC1: 'VIC', QLD1: 'QLD', SA1: 'SA'
+  }
+  if (elec && Object.keys(elec).length > 0) {
+    for (const [regionCode, regionLabel] of Object.entries(NEM_REGIONS)) {
+      const regionData = elec[regionCode]
+      if (!regionData?.series?.Gas) continue
+      defs.push({
+        id: `gpg-gen|${regionCode}`,
+        label: `GPG Generation · ${regionLabel}`,
+        unit: 'MW', category: 'GPG Generation (MW)', chartType: 'line', monthlyAgg: 'avg' as const,
+        extract: (d) => {
+          const rd = d.elec?.[regionCode]
+          if (!rd?.dates || !rd?.gas) return null
+          return { dates: rd.dates, values: rd.gas }
         },
       })
     }
@@ -378,6 +418,7 @@ function smartTicks(dates: string[], maxTicks = 10): string[] {
 let gbbCacheCC:    { data: any; at: number } | null = null
 let priceCacheCC:  { data: any; at: number } | null = null
 let lngCacheCC:    { data: any; at: number } | null = null
+let elecCacheCC:   { data: any; at: number } | null = null
 const TTL = 60 * 60 * 1000
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -385,6 +426,7 @@ export default function CustomChartDashboard() {
   const [gbbData,    setGbbData]    = useState<any>(null)
   const [priceData,  setPriceData]  = useState<any>(null)
   const [lngData,    setLngData]    = useState<any>(null)
+  const [elecData,   setElecData]   = useState<any>(null)
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState<string|null>(null)
 
@@ -400,7 +442,7 @@ export default function CustomChartDashboard() {
       setLoading(true)
       try {
         const now = Date.now()
-        const [gbbRes, priceRes, lngRes] = await Promise.all([
+        const [gbbRes, priceRes, lngRes, elecRes] = await Promise.all([
           gbbCacheCC && now - gbbCacheCC.at < TTL
             ? Promise.resolve(gbbCacheCC.data)
             : fetch('/api/gbb').then(r => r.json()).then(j => { if (j.ok) { gbbCacheCC = { data: j.data, at: Date.now() }; return j.data } throw new Error(j.error) }),
@@ -410,10 +452,18 @@ export default function CustomChartDashboard() {
           lngCacheCC && now - lngCacheCC.at < TTL
             ? Promise.resolve(lngCacheCC.data)
             : fetch('/api/lng').then(r => r.json()).then(j => { if (j.ok) { lngCacheCC = { data: j.data, at: Date.now() }; return j.data } throw new Error(j.error) }),
+          // Daily gas generation MW per NEM region
+          elecCacheCC && now - elecCacheCC.at < TTL
+            ? Promise.resolve(elecCacheCC.data)
+            : fetch('/api/gasmix').then(r => r.json()).then(j => {
+                if (j.ok) { elecCacheCC = { data: j.data, at: Date.now() }; return j.data }
+                throw new Error(j.error)
+              }),
         ])
         setGbbData(gbbRes)
         setPriceData(priceRes)
         setLngData(lngRes)
+        setElecData(elecRes)
       } catch (e: any) { setError(e.message) }
       finally { setLoading(false) }
     }
@@ -421,8 +471,8 @@ export default function CustomChartDashboard() {
   }, [])
 
   const allData: AllData = useMemo(() => ({
-    gbb: gbbData, prices: priceData, lng: lngData,
-  }), [gbbData, priceData, lngData])
+    gbb: gbbData, prices: priceData, lng: lngData, elec: elecData,
+  }), [gbbData, priceData, lngData, elecData])
 
   // Build catalogue from loaded data
   const catalogue = useMemo(() => buildCatalogue(allData), [allData])

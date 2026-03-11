@@ -97,7 +97,7 @@ function aggregateFacility(unitSeries: Record<string, [string, number][]>, inter
 }
 
 
-async function fetchFuelMix(region: string, interval: string): Promise<{
+export async function fetchFuelMix(region: string, interval: string): Promise<{
   dates: string[]
   series: Record<string, (number | null)[]>
 }> {
