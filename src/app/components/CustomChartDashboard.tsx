@@ -66,7 +66,7 @@ interface AllData {
   gbb:    any
   prices: any
   lng:    any
-  elec:   any   // { dates, series } per region from electricity API
+  elec:   any   // gpggen: { dates, byRegion } from /api/gpggen
 }
 
 // ── Series catalogue ──────────────────────────────────────────────────────────
@@ -191,24 +191,39 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
     }
   }
 
-  // ── GPG generation (MW) from electricity API — daily averages per NEM region ──
-  const NEM_REGIONS: Record<string, string> = {
-    NSW1: 'NSW', VIC1: 'VIC', QLD1: 'QLD', SA1: 'SA'
-  }
-  if (elec && Object.keys(elec).length > 0) {
-    for (const [regionCode, regionLabel] of Object.entries(NEM_REGIONS)) {
-      const regionData = elec[regionCode]
-      if (!regionData?.series?.Gas) continue
+  // ── GPG generation (MWh/day) — state totals + individual facilities ──
+  if (elec?.byRegion && elec?.dates) {
+    for (const [regionCode, regionData] of Object.entries(elec.byRegion as Record<string, any>)) {
+      const regionLabel = regionData.label as string
+
+      // State total
       defs.push({
-        id: `gpg-gen|${regionCode}`,
-        label: `GPG Generation · ${regionLabel}`,
-        unit: 'MW', category: 'GPG Generation (MW)', chartType: 'line', monthlyAgg: 'avg' as const,
+        id: `gpg-gen-total|${regionCode}`,
+        label: `GPG Generation Total · ${regionLabel}`,
+        unit: 'MWh/day', category: 'GPG Generation', chartType: 'bar', monthlyAgg: 'sum' as const,
         extract: (d) => {
-          const rd = d.elec?.[regionCode]
-          if (!rd?.dates || !rd?.gas) return null
-          return { dates: rd.dates, values: rd.gas }
+          const rd = d.elec?.byRegion?.[regionCode]
+          if (!rd) return null
+          return { dates: d.elec.dates, values: rd.stateTotal }
         },
       })
+
+      // Individual facilities
+      for (const fac of (regionData.facilities as { name: string; values: (number|null)[] }[])) {
+        defs.push({
+          id: `gpg-gen-fac|${regionCode}|${fac.name}`,
+          label: `GPG Generation · ${regionLabel} · ${fac.name}`,
+          unit: 'MWh/day', category: 'GPG Generation', chartType: 'line', monthlyAgg: 'sum' as const,
+          extract: (d) => {
+            const rd = d.elec?.byRegion?.[regionCode]
+            if (!rd) return null
+            const f = (rd.facilities as { name: string; values: (number|null)[] }[])
+              .find(x => x.name === fac.name)
+            if (!f) return null
+            return { dates: d.elec.dates, values: f.values }
+          },
+        })
+      }
     }
   }
 
@@ -452,10 +467,10 @@ export default function CustomChartDashboard() {
           lngCacheCC && now - lngCacheCC.at < TTL
             ? Promise.resolve(lngCacheCC.data)
             : fetch('/api/lng').then(r => r.json()).then(j => { if (j.ok) { lngCacheCC = { data: j.data, at: Date.now() }; return j.data } throw new Error(j.error) }),
-          // Daily gas generation MW per NEM region
+          // Daily GPG generation MWh per facility + state totals
           elecCacheCC && now - elecCacheCC.at < TTL
             ? Promise.resolve(elecCacheCC.data)
-            : fetch('/api/gasmix').then(r => r.json()).then(j => {
+            : fetch('/api/gpggen').then(r => r.json()).then(j => {
                 if (j.ok) { elecCacheCC = { data: j.data, at: Date.now() }; return j.data }
                 throw new Error(j.error)
               }),
