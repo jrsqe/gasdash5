@@ -465,6 +465,8 @@ export default function CustomChartDashboard() {
   const [search,      setSearch]      = useState('')
   const [openCat,     setOpenCat]     = useState<string|null>(null)
   const [range,       setRange]       = useState<DateRangeOption>('all')
+  const [customStart, setCustomStart] = useState<string>('')
+  const [customEnd,   setCustomEnd]   = useState<string>('')
   const [viewMode,    setViewMode]    = useState<ViewMode>('daily')
 
   // Fetch all data sources in parallel
@@ -553,12 +555,18 @@ export default function CustomChartDashboard() {
   // Align series to intersection date range
   const { dates: allDates, aligned } = useMemo(() => alignSeries(activeSeries), [activeSeries])
 
-  // Apply date range window (from the end of the available intersection)
+  // Apply date range window
   const windowedDates = useMemo(() => {
-    if (range === 'all' || !allDates.length) return allDates
+    if (!allDates.length) return allDates
+    if (range === 'custom') {
+      const s = customStart || allDates[0] || ''
+      const e = customEnd   || allDates[allDates.length - 1] || ''
+      return allDates.filter(d => d >= s && d <= e)
+    }
+    if (range === 'all') return allDates
     const days = range === '1y' ? 365 : range === '90d' ? 90 : range === '30d' ? 30 : range === '7d' ? 7 : 3
     return allDates.slice(-days)
-  }, [allDates, range])
+  }, [allDates, range, customStart, customEnd])
 
   // Axis assignment — scale-aware + unit-aware
   const { axisMap, leftUnit, rightUnit, hasDual: hasDualAxis } = useMemo(
@@ -859,6 +867,32 @@ export default function CustomChartDashboard() {
                       })}
                     </div>
                   </div>
+                  {/* Date range inputs */}
+                  {activeSeries.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <input type="date"
+                        value={customStart || (windowedDates.length > 0 ? windowedDates[0] : '')}
+                        min={allDates[0] ?? ''} max={allDates[allDates.length-1] ?? ''}
+                        onChange={e => { setRange('custom'); setCustomStart(e.target.value) }}
+                        style={{
+                          fontFamily: 'var(--font-data)', fontSize: '0.7rem', color: 'var(--text)',
+                          background: 'var(--surface-2)', border: '1px solid var(--border)',
+                          borderRadius: 6, padding: '0.2rem 0.45rem', width: 122, outline: 'none',
+                        }}
+                      />
+                      <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-data)', fontSize: '0.65rem' }}>→</span>
+                      <input type="date"
+                        value={customEnd || (windowedDates.length > 0 ? windowedDates[windowedDates.length-1] : '')}
+                        min={allDates[0] ?? ''} max={allDates[allDates.length-1] ?? ''}
+                        onChange={e => { setRange('custom'); setCustomEnd(e.target.value) }}
+                        style={{
+                          fontFamily: 'var(--font-data)', fontSize: '0.7rem', color: 'var(--text)',
+                          background: 'var(--surface-2)', border: '1px solid var(--border)',
+                          borderRadius: 6, padding: '0.2rem 0.45rem', width: 122, outline: 'none',
+                        }}
+                      />
+                    </div>
+                  )}
                   {hasDualAxis && (
                     <div style={{ display: 'flex', gap: '1rem', fontFamily: 'var(--font-data)', fontSize: '0.62rem' }}>
                       <span style={{ color: 'var(--muted)' }}>

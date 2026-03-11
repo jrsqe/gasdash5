@@ -74,7 +74,7 @@ function lastVal(arr: (number|null)[]): number|null {
   return null
 }
 
-type DateRangeOption = 'all'|'1y'|'90d'|'30d'|'7d'|'3d'
+type DateRangeOption = 'all'|'1y'|'90d'|'30d'|'7d'|'3d'|'custom'
 const DATE_RANGE_OPTIONS: {value: DateRangeOption; label: string}[] = [
   { value:'all',  label:'All'   },
   { value:'1y',   label:'1 year' },
@@ -84,17 +84,15 @@ const DATE_RANGE_OPTIONS: {value: DateRangeOption; label: string}[] = [
   { value:'3d',   label:'3d'    },
 ]
 
-function useWindow(dates: string[], dateRange: DateRangeOption) {
+function useWindow(dates: string[], dateRange: DateRangeOption, customStart?: string, customEnd?: string) {
   const windowSize = useMemo(() => {
-    if (dateRange === 'all' || !dates.length) return dates.length
+    if (dateRange === 'all' || dateRange === 'custom' || !dates.length) return dates.length
     const d = dateRange === '1y' ? 365 : dateRange === '90d' ? 90 : dateRange === '30d' ? 30 : dateRange === '7d' ? 7 : 3
     return Math.min(d, dates.length)
   }, [dateRange, dates])
 
   const [windowEnd, setWindowEnd] = useState(dates.length - 1)
 
-  // Use a stable key (first+last date) so windowEnd only resets when data
-  // actually changes, not on every new array reference from useMemo
   const datesKey = dates.length > 0 ? `${dates[0]}|${dates[dates.length - 1]}|${dates.length}` : ''
   const prevDatesKey = useRef(datesKey)
   useEffect(() => {
@@ -103,7 +101,6 @@ function useWindow(dates: string[], dateRange: DateRangeOption) {
       setWindowEnd(dates.length - 1)
     }
   })
-  // Also reset when dateRange changes
   const prevRange = useRef(dateRange)
   useEffect(() => {
     if (prevRange.current !== dateRange) {
@@ -113,11 +110,24 @@ function useWindow(dates: string[], dateRange: DateRangeOption) {
   })
 
   const sliced = useMemo(() => {
+    if (dateRange === 'custom') {
+      const s = customStart ?? dates[0] ?? ''
+      const e = customEnd   ?? dates[dates.length - 1] ?? ''
+      return dates.filter(d => d >= s && d <= e)
+    }
     if (dateRange === 'all') return dates
     return dates.slice(Math.max(0, windowEnd - windowSize + 1), windowEnd + 1)
-  }, [dates, dateRange, windowSize, windowEnd])
+  }, [dates, dateRange, windowSize, windowEnd, customStart, customEnd])
 
-  const sliceStart = dateRange === 'all' ? 0 : Math.max(0, windowEnd - windowSize + 1)
+  const sliceStart = useMemo(() => {
+    if (dateRange === 'custom') {
+      const s = customStart ?? dates[0] ?? ''
+      return Math.max(0, dates.findIndex(d => d >= s))
+    }
+    if (dateRange === 'all') return 0
+    return Math.max(0, windowEnd - windowSize + 1)
+  }, [dates, dateRange, windowEnd, windowSize, customStart])
+
   return { sliced, sliceStart, windowEnd, setWindowEnd, windowSize }
 }
 
@@ -258,19 +268,48 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
   )
 }
 
-function RangeControls({ dates, dateRange, onChange, sliced, windowEnd, setWindowEnd, windowSize, sliceStart }: any) {
+function RangeControls({ dates, dateRange, onChange, sliced, windowEnd, setWindowEnd, windowSize, sliceStart, customStart, customEnd, onCustomStart, onCustomEnd }: any) {
   const fmtL = (d: string) => { const [,mm,dd] = d.split('-'); return `${dd}/${mm}` }
+
+  const inputStyle: React.CSSProperties = {
+    fontFamily: 'var(--font-data)', fontSize: '0.7rem', color: 'var(--text)',
+    background: 'var(--surface-2)', border: '1px solid var(--border)',
+    borderRadius: 6, padding: '0.2rem 0.45rem', width: 108,
+    outline: 'none', cursor: 'text',
+  }
+
   return (
     <div style={{ marginTop:'1rem', paddingTop:'1rem', borderTop:'1px solid var(--border)' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem' }}>
         <PillGroup options={DATE_RANGE_OPTIONS} value={dateRange} onChange={onChange} label="View" />
-        {dateRange !== 'all' && (
-          <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--muted)' }}>
-            {sliced.length} of {dates.length} days
-          </span>
-        )}
+        <div style={{ display:'flex', alignItems:'center', gap:'0.4rem' }}>
+          <input
+            type="date" value={customStart ?? (sliced.length > 0 ? sliced[0] : '')}
+            min={dates[0] ?? ''} max={dates[dates.length-1] ?? ''}
+            onChange={e => {
+              onChange('custom')
+              onCustomStart(e.target.value)
+            }}
+            style={inputStyle}
+          />
+          <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.65rem' }}>→</span>
+          <input
+            type="date" value={customEnd ?? (sliced.length > 0 ? sliced[sliced.length-1] : '')}
+            min={dates[0] ?? ''} max={dates[dates.length-1] ?? ''}
+            onChange={e => {
+              onChange('custom')
+              onCustomEnd(e.target.value)
+            }}
+            style={inputStyle}
+          />
+          {dateRange !== 'all' && (
+            <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem', color:'var(--muted)', whiteSpace:'nowrap' }}>
+              {sliced.length}d
+            </span>
+          )}
+        </div>
       </div>
-      {dateRange !== 'all' && dates.length > windowSize && (
+      {dateRange !== 'all' && dateRange !== 'custom' && dates.length > windowSize && (
         <WindowSlider
           totalRows={dates.length} windowSize={windowSize} windowEnd={windowEnd} onChange={setWindowEnd}
           firstLabel={dates.length > 0 ? fmtL(dates[0]) : ''}
@@ -371,6 +410,8 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
   const states     = Object.keys(activeData).sort()
   const [state, setState] = useState(states[0] ?? 'NSW')
   const [range, setRange] = useState<DateRangeOption>('all')
+  const [customStart, setCustomStart] = useState<string>('')
+  const [customEnd,   setCustomEnd]   = useState<string>('')
 
   // Trim dates to only span with actual data for this panel
   const { dates: trimmedDates, offset: trimOffset } = useMemo(() => {
@@ -379,7 +420,7 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
     return trimDates(dates, arrs)
   }, [dates, activeData, state])
 
-  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range)
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range, customStart, customEnd)
 
   useEffect(() => {
     const s = Object.keys(activeData).sort()
@@ -511,7 +552,8 @@ function GpgPanel({ dates, gpgByState, largeByState }: {
 
       {/* Range controls — always visible, drives both daily and monthly views */}
       <RangeControls dates={trimmedDates} dateRange={range} onChange={setRange}
-        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
+        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart}
+        customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} />
     </div>
   )
 }
@@ -527,6 +569,8 @@ function StoragePanel({ dates, storageByFacility }: {
   const [state,  setState]  = useState(stateGroups[0] ?? 'VIC')
   const [metric, setMetric] = useState<'level'|'flow'>('level')
   const [range,  setRange]  = useState<DateRangeOption>('all')
+  const [customStart, setCustomStart] = useState<string>('')
+  const [customEnd,   setCustomEnd]   = useState<string>('')
 
   const { dates: trimmedDates, offset: trimOffset } = useMemo(() => {
     const sf = facilities.filter(f => stateOf(f) === state)
@@ -538,7 +582,7 @@ function StoragePanel({ dates, storageByFacility }: {
     return trimDates(dates, arrs)
   }, [dates, facilities, state, storageByFacility])
 
-  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range)
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range, customStart, customEnd)
 
   const sf = facilities.filter(f => stateOf(f) === state)
 
@@ -609,7 +653,8 @@ function StoragePanel({ dates, storageByFacility }: {
         </>
       )}
       <RangeControls dates={trimmedDates} dateRange={range} onChange={setRange}
-        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
+        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart}
+        customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} />
     </div>
   )
 }
@@ -621,6 +666,8 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
   const states = Object.keys(prodByState).sort()
   const [state,     setState]    = useState(states[0] ?? 'VIC')
   const [range,     setRange]    = useState<DateRangeOption>('all')
+  const [customStart, setCustomStart] = useState<string>('')
+  const [customEnd,   setCustomEnd]   = useState<string>('')
   const [viewMode,  setViewMode] = useState<'daily'|'monthly'>('daily')
   const [showFilter, setShowFilter] = useState(false)
   const [selected,   setSelected]   = useState<Set<string>>(new Set())
@@ -630,7 +677,7 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
     return trimDates(dates, arrs)
   }, [dates, prodByState, state])
 
-  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range)
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range, customStart, customEnd)
 
   useEffect(() => { if (!states.includes(state)) setState(states[0] ?? '') }, [states])
   useEffect(() => { setSelected(new Set()) }, [state])
@@ -754,7 +801,8 @@ function ProductionPanel({ dates, prodByState }: { dates:string[]; prodByState:R
       )}
 
       <RangeControls dates={trimmedDates} dateRange={range} onChange={setRange}
-        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
+        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart}
+        customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} />
     </div>
   )
 }
@@ -773,6 +821,8 @@ function PipelinePanel({ dates, pipelineFlows }: {
 
   const [activeGroup,  setActiveGroup]  = useState(groups[0]?.label ?? '')
   const [range,        setRange]        = useState<DateRangeOption>('all')
+  const [customStart,  setCustomStart]  = useState<string>('')
+  const [customEnd,    setCustomEnd]    = useState<string>('')
   const [showFilter,   setShowFilter]   = useState(false)
   const [hiddenPipes,  setHiddenPipes]  = useState<Set<string>>(new Set())
 
@@ -781,7 +831,7 @@ function PipelinePanel({ dates, pipelineFlows }: {
     return trimDates(dates, arrs)
   }, [dates, pipelines, pipelineFlows])
 
-  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range)
+  const { sliced, sliceStart, windowEnd, setWindowEnd, windowSize } = useWindow(trimmedDates, range, customStart, customEnd)
 
   const groupPipes   = groups.find(g => g.label === activeGroup)?.pipes ?? []
   const visiblePipes = groupPipes.filter(p => !hiddenPipes.has(p))
@@ -994,7 +1044,8 @@ function PipelinePanel({ dates, pipelineFlows }: {
       })()}
 
       <RangeControls dates={dates} dateRange={range} onChange={setRange}
-        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart} />
+        sliced={sliced} windowEnd={windowEnd} setWindowEnd={setWindowEnd} windowSize={windowSize} sliceStart={sliceStart}
+        customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} />
     </div>
   )
 }
