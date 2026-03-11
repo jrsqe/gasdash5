@@ -25,6 +25,18 @@ function fmtDateShort(d: string) {
   return `${dd}/${m}`
 }
 
+// ── Range / View types ───────────────────────────────────────────────────────
+type DateRangeOption = 'all' | '1y' | '90d' | '30d' | '7d' | '3d'
+const DATE_RANGE_OPTIONS: { value: DateRangeOption; label: string }[] = [
+  { value: 'all', label: 'All'    },
+  { value: '1y',  label: '1 year' },
+  { value: '90d', label: '90d'    },
+  { value: '30d', label: '30d'    },
+  { value: '7d',  label: '7d'     },
+  { value: '3d',  label: '3d'     },
+]
+type ViewMode = 'daily' | 'monthly'
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 // A resolved series: date-aligned values ready to plot
@@ -255,37 +267,99 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
   return defs
 }
 
-// ── Date union alignment ──────────────────────────────────────────────────────
-// Given multiple series with different date arrays, align them to a common date set
+// ── Date intersection alignment ───────────────────────────────────────────────
+// Aligns series to the INTERSECTION of their date ranges (smallest common window),
+// so the chart never shows a long empty lead/tail from one series dominating.
 function alignSeries(seriesList: ResolvedSeries[]): {
   dates: string[]
   aligned: Record<string, (number|null)[]>
 } {
   if (!seriesList.length) return { dates: [], aligned: {} }
 
-  // Union of all dates, sorted
-  const dateSet = new Set<string>()
-  for (const s of seriesList) s.dates.forEach(d => dateSet.add(d))
-  const dates = Array.from(dateSet).sort()
-
-  const aligned: Record<string, (number|null)[]> = {}
-  for (const s of seriesList) {
+  // Build a lookup per series, then intersect dates
+  const lookups: { id: string; lookup: Record<string, number|null> }[] = seriesList.map(s => {
     const lookup: Record<string, number|null> = {}
     s.dates.forEach((d, i) => { lookup[d] = s.values[i] ?? null })
-    aligned[s.id] = dates.map(d => lookup[d] ?? null)
+    return { id: s.id, lookup }
+  })
+
+  // Start from union, then keep only dates where at least one series has real data
+  // AND within the overlapping date range of all series that have any data.
+  const allDates = new Set<string>()
+  for (const s of seriesList) s.dates.forEach(d => allDates.add(d))
+
+  // Per-series first/last date with actual (non-null) data
+  const seriesSpans = seriesList.map(s => {
+    const withData = s.dates.filter((d, i) => s.values[i] != null && s.values[i] !== 0)
+    return { first: withData[0] ?? null, last: withData[withData.length - 1] ?? null }
+  }).filter(sp => sp.first !== null)
+
+  // Intersection: latest first-date and earliest last-date across all series
+  const rangeStart = seriesSpans.reduce((acc, sp) => sp.first! > acc ? sp.first! : acc, seriesSpans[0]?.first ?? '')
+  const rangeEnd   = seriesSpans.reduce((acc, sp) => sp.last!  < acc ? sp.last!  : acc, seriesSpans[0]?.last  ?? '')
+
+  const dates = Array.from(allDates)
+    .filter(d => d >= rangeStart && d <= rangeEnd)
+    .sort()
+
+  const aligned: Record<string, (number|null)[]> = {}
+  for (const { id, lookup } of lookups) {
+    aligned[id] = dates.map(d => lookup[d] ?? null)
   }
   return { dates, aligned }
 }
 
 // ── Axis assignment ───────────────────────────────────────────────────────────
-// Group series by unit; if >1 unit group, use dual axes
-function assignAxes(series: ResolvedSeries[]): Record<string, 'left'|'right'> {
-  const units = Array.from(new Set(series.map(s => s.unit)))
-  const result: Record<string, 'left'|'right'> = {}
+// Uses BOTH unit difference AND scale ratio to decide on dual axes.
+// If two series share the same unit but one is 10× larger, they still get split.
+function seriesMedian(values: (number|null)[]): number {
+  const nums = values.filter((v): v is number => v != null && v !== 0).sort((a, b) => a - b)
+  if (!nums.length) return 1
+  return nums[Math.floor(nums.length / 2)]
+}
+
+function assignAxes(series: ResolvedSeries[]): {
+  axisMap:    Record<string, 'left'|'right'>
+  leftUnit:   string
+  rightUnit:  string
+  hasDual:    boolean
+} {
+  if (!series.length) return { axisMap: {}, leftUnit: '', rightUnit: '', hasDual: false }
+
+  // Group by unit
+  const unitGroups: Record<string, ResolvedSeries[]> = {}
   for (const s of series) {
-    result[s.id] = units.indexOf(s.unit) === 0 ? 'left' : 'right'
+    if (!unitGroups[s.unit]) unitGroups[s.unit] = []
+    unitGroups[s.unit].push(s)
   }
-  return result
+  const units = Object.keys(unitGroups)
+
+  // If only one unit, check scale ratio within that group
+  if (units.length === 1) {
+    const medians = series.map(s => seriesMedian(s.values))
+    const maxMed  = Math.max(...medians)
+    const minMed  = Math.min(...medians.filter(m => m > 0))
+    const ratio   = minMed > 0 ? maxMed / minMed : 1
+
+    // Split onto two axes if scale differs by more than 5×
+    if (ratio > 5 && series.length > 1) {
+      // Put larger-scale series on left, smaller on right
+      const sorted = [...series].sort((a, b) => seriesMedian(b.values) - seriesMedian(a.values))
+      const leftIds  = new Set(sorted.slice(0, Math.ceil(sorted.length / 2)).map(s => s.id))
+      const axisMap: Record<string, 'left'|'right'> = {}
+      for (const s of series) axisMap[s.id] = leftIds.has(s.id) ? 'left' : 'right'
+      return { axisMap, leftUnit: units[0]!, rightUnit: units[0]!, hasDual: true }
+    }
+
+    const axisMap: Record<string, 'left'|'right'> = {}
+    for (const s of series) axisMap[s.id] = 'left'
+    return { axisMap, leftUnit: units[0]!, rightUnit: '', hasDual: false }
+  }
+
+  // Multiple units: first unit on left, second on right, rest also right
+  const axisMap: Record<string, 'left'|'right'> = {}
+  for (const s of series) axisMap[s.id] = s.unit === units[0] ? 'left' : 'right'
+  return { axisMap, leftUnit: units[0]!, rightUnit: units[1]!, hasDual: true }
 }
 
 // ── Smart x-axis ticks ────────────────────────────────────────────────────────
@@ -315,6 +389,8 @@ export default function CustomChartDashboard() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [search,      setSearch]      = useState('')
   const [openCat,     setOpenCat]     = useState<string|null>(null)
+  const [range,       setRange]       = useState<DateRangeOption>('all')
+  const [viewMode,    setViewMode]    = useState<ViewMode>('daily')
 
   // Fetch all data sources in parallel
   useEffect(() => {
@@ -390,24 +466,58 @@ export default function CustomChartDashboard() {
     })
   }, [selectedIds, catalogue, allData])
 
-  // Align all series to common date axis
-  const { dates: chartDates, aligned } = useMemo(() => alignSeries(activeSeries), [activeSeries])
+  // Align series to intersection date range
+  const { dates: allDates, aligned } = useMemo(() => alignSeries(activeSeries), [activeSeries])
 
-  // Axis assignment
-  const axisMap = useMemo(() => assignAxes(activeSeries), [activeSeries])
-  const units   = useMemo(() => Array.from(new Set(activeSeries.map(s => s.unit))), [activeSeries])
-  const hasDualAxis = units.length > 1
+  // Apply date range window (from the end of the available intersection)
+  const windowedDates = useMemo(() => {
+    if (range === 'all' || !allDates.length) return allDates
+    const days = range === '1y' ? 365 : range === '90d' ? 90 : range === '30d' ? 30 : range === '7d' ? 7 : 3
+    return allDates.slice(-days)
+  }, [allDates, range])
 
-  // Build chart rows
-  const chartRows = useMemo(() => {
-    return chartDates.map(d => {
+  // Axis assignment — scale-aware + unit-aware
+  const { axisMap, leftUnit, rightUnit, hasDual: hasDualAxis } = useMemo(
+    () => assignAxes(activeSeries), [activeSeries]
+  )
+  const units = useMemo(() => Array.from(new Set(activeSeries.map(s => s.unit))), [activeSeries])
+
+  // Monthly aggregation
+  const MONTHS_CC = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const monthlyRows = useMemo(() => {
+    const byMonth: Record<string, Record<string, number>> = {}
+    for (const d of windowedDates) {
+      const month = d.slice(0, 7)
+      if (!byMonth[month]) byMonth[month] = {}
+      const idx = allDates.indexOf(d)
+      for (const s of activeSeries) {
+        byMonth[month][s.id] = (byMonth[month][s.id] ?? 0) + (aligned[s.id]?.[idx] ?? 0)
+      }
+    }
+    return Object.entries(byMonth)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([ym, vals]) => {
+        const [y, m] = ym.split('-')
+        return { date: `${MONTHS_CC[parseInt(m??'1')-1]} ${(y??'').slice(2)}`, ...vals }
+      })
+  }, [windowedDates, allDates, aligned, activeSeries])
+
+  // Daily chart rows
+  const dailyRows = useMemo(() => {
+    return windowedDates.map(d => {
+      const idx = allDates.indexOf(d)
       const row: Record<string, any> = { date: d }
-      for (const s of activeSeries) row[s.id] = aligned[s.id]?.[chartDates.indexOf(d)] ?? null
+      for (const s of activeSeries) row[s.id] = aligned[s.id]?.[idx] ?? null
       return row
     })
-  }, [chartDates, aligned, activeSeries])
+  }, [windowedDates, allDates, aligned, activeSeries])
 
-  const ticks = useMemo(() => smartTicks(chartDates), [chartDates])
+  const chartRows = viewMode === 'monthly' ? monthlyRows : dailyRows
+  const chartDates = viewMode === 'monthly'
+    ? monthlyRows.map(r => r.date as string)
+    : windowedDates
+
+  const ticks = useMemo(() => smartTicks(viewMode === 'monthly' ? monthlyRows.map(r => r.date as string) : windowedDates), [windowedDates, monthlyRows, viewMode])
 
   const toggleSeries = useCallback((id: string) => {
     setSelectedIds(prev =>
@@ -593,17 +703,52 @@ export default function CustomChartDashboard() {
             ) : (
               <>
                 {/* Axis legend */}
-                {hasDualAxis && (
-                  <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '0.75rem',
-                    fontFamily: 'var(--font-data)', fontSize: '0.62rem' }}>
-                    <span style={{ color: 'var(--muted)' }}>
-                      Left axis: <strong style={{ color: 'var(--text)' }}>{units[0]}</strong>
-                    </span>
-                    <span style={{ color: 'var(--muted)' }}>
-                      Right axis: <strong style={{ color: 'var(--text)' }}>{units[1]}</strong>
-                    </span>
+                {/* View/Range controls */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.85rem' }}>
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    {/* View mode */}
+                    <div style={{ display: 'flex', background: 'var(--surface-2)',
+                      border: '1px solid var(--border)', borderRadius: 8, padding: 2, gap: 2 }}>
+                      {([{value:'daily',label:'Daily'},{value:'monthly',label:'Monthly'}] as {value:ViewMode;label:string}[]).map(opt => {
+                        const active = opt.value === viewMode
+                        return (
+                          <button key={opt.value} onClick={() => setViewMode(opt.value)} style={{
+                            padding: '0.25rem 0.65rem', borderRadius: 6, border: 'none', cursor: 'pointer',
+                            fontFamily: 'var(--font-ui)', fontSize: '0.72rem', fontWeight: active ? 600 : 400,
+                            background: active ? 'var(--accent)' : 'transparent',
+                            color: active ? '#fff' : 'var(--muted)', transition: 'all 0.15s',
+                          }}>{opt.label}</button>
+                        )
+                      })}
+                    </div>
+                    {/* Date range */}
+                    <div style={{ display: 'flex', background: 'var(--surface-2)',
+                      border: '1px solid var(--border)', borderRadius: 8, padding: 2, gap: 2 }}>
+                      {DATE_RANGE_OPTIONS.map(opt => {
+                        const active = opt.value === range
+                        return (
+                          <button key={opt.value} onClick={() => setRange(opt.value)} style={{
+                            padding: '0.25rem 0.65rem', borderRadius: 6, border: 'none', cursor: 'pointer',
+                            fontFamily: 'var(--font-ui)', fontSize: '0.72rem', fontWeight: active ? 600 : 400,
+                            background: active ? 'var(--accent)' : 'transparent',
+                            color: active ? '#fff' : 'var(--muted)', transition: 'all 0.15s',
+                          }}>{opt.label}</button>
+                        )
+                      })}
+                    </div>
                   </div>
-                )}
+                  {hasDualAxis && (
+                    <div style={{ display: 'flex', gap: '1rem', fontFamily: 'var(--font-data)', fontSize: '0.62rem' }}>
+                      <span style={{ color: 'var(--muted)' }}>
+                        ← <strong style={{ color: 'var(--text)' }}>{leftUnit}</strong>
+                      </span>
+                      <span style={{ color: 'var(--muted)' }}>
+                        <strong style={{ color: 'var(--text)' }}>{rightUnit || leftUnit}</strong> →
+                      </span>
+                    </div>
+                  )}
+                </div>
 
                 <ResponsiveContainer width="100%" height={420}>
                   <ComposedChart data={chartRows} margin={{ top: 8, right: hasDualAxis ? 60 : 16, left: 0, bottom: 8 }}>
@@ -612,8 +757,9 @@ export default function CustomChartDashboard() {
                       dataKey="date"
                       ticks={ticks}
                       tickFormatter={d => {
-                        const [, m, dd] = d.split('-')
-                        return `${dd}/${m}`
+                        if (viewMode === 'monthly') return d
+                        const parts = d.split('-')
+                        return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d
                       }}
                       tick={{ fill: '#555', fontSize: 9, fontFamily: 'var(--font-data)' }}
                       tickLine={false} axisLine={{ stroke: 'var(--border)' }} interval={0}
@@ -624,8 +770,8 @@ export default function CustomChartDashboard() {
                       tick={{ fill: '#555', fontSize: 9, fontFamily: 'var(--font-data)' }}
                       tickLine={false} axisLine={false} width={52}
                       tickFormatter={v => Math.abs(v) >= 1000 ? `${(v/1000).toFixed(1)}k` : String(Math.round(v))}
-                      label={units[0] ? {
-                        value: units[0], angle: -90, position: 'insideLeft',
+                      label={leftUnit ? {
+                        value: leftUnit, angle: -90, position: 'insideLeft',
                         fill: 'var(--muted)', fontSize: 9, fontFamily: 'var(--font-data)', dy: 30,
                       } : undefined}
                     />
@@ -636,8 +782,8 @@ export default function CustomChartDashboard() {
                         tick={{ fill: '#888', fontSize: 9, fontFamily: 'var(--font-data)' }}
                         tickLine={false} axisLine={false} width={52}
                         tickFormatter={v => Math.abs(v) >= 1000 ? `${(v/1000).toFixed(1)}k` : String(Math.round(v * 10) / 10)}
-                        label={units[1] ? {
-                          value: units[1], angle: 90, position: 'insideRight',
+                        label={rightUnit ? {
+                          value: rightUnit, angle: 90, position: 'insideRight',
                           fill: '#888', fontSize: 9, fontFamily: 'var(--font-data)', dy: -20,
                         } : undefined}
                       />
@@ -699,10 +845,11 @@ export default function CustomChartDashboard() {
                 </ResponsiveContainer>
 
                 {/* Date range info */}
-                {chartDates.length > 0 && (
+                {windowedDates.length > 0 && (
                   <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-data)',
                     fontSize: '0.6rem', color: 'var(--muted)', textAlign: 'right' }}>
-                    {chartDates[0]} → {chartDates[chartDates.length - 1]} · {chartDates.length} data points
+                    {windowedDates[0]} → {windowedDates[windowedDates.length-1]} · {windowedDates.length} days
+                    {allDates.length > windowedDates.length && ` (of ${allDates.length} available)`}
                   </div>
                 )}
               </>
