@@ -46,18 +46,20 @@ export interface ResolvedSeries {
   unit:     string          // TJ, $/GJ, MW, %
   dates:    string[]        // YYYY-MM-DD
   values:   (number|null)[] // aligned to dates
-  category: string          // source group label
-  chartType: 'line' | 'bar'
+  category:   string          // source group label
+  chartType:  'line' | 'bar'
+  monthlyAgg: 'sum' | 'avg'   // how to aggregate daily values into months
 }
 
 // Catalogue entry describing how to extract a series from raw data
 interface SeriesDef {
-  id:       string
-  label:    string
-  unit:     string
-  category: string
-  chartType: 'line' | 'bar'
-  extract:  (allData: AllData) => { dates: string[]; values: (number|null)[] } | null
+  id:         string
+  label:      string
+  unit:       string
+  category:   string
+  chartType:  'line' | 'bar'
+  monthlyAgg: 'sum' | 'avg'
+  extract:    (allData: AllData) => { dates: string[]; values: (number|null)[] } | null
 }
 
 interface AllData {
@@ -79,7 +81,7 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
         defs.push({
           id: `gpg|${state}|${facility}`,
           label: `GPG · ${state} · ${facility}`,
-          unit: 'TJ/day', category: 'GPG Gas Demand', chartType: 'bar',
+          unit: 'TJ/day', category: 'GPG Gas Demand', chartType: 'bar', monthlyAgg: 'sum' as const,
           extract: (d) => {
             const v = d.gbb?.gpgByState?.[state]?.[facility]
             return v ? { dates: d.gbb.dates, values: v } : null
@@ -90,7 +92,7 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
       defs.push({
         id: `gpg-total|${state}`,
         label: `GPG Total · ${state}`,
-        unit: 'TJ/day', category: 'GPG Gas Demand', chartType: 'bar',
+        unit: 'TJ/day', category: 'GPG Gas Demand', chartType: 'bar', monthlyAgg: 'sum' as const,
         extract: (d) => {
           const facs = d.gbb?.gpgByState?.[state]
           if (!facs) return null
@@ -112,7 +114,7 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
         defs.push({
           id: `large|${state}|${facility}`,
           label: `Large Industry · ${state} · ${facility}`,
-          unit: 'TJ/day', category: 'Large Industry Demand', chartType: 'bar',
+          unit: 'TJ/day', category: 'Large Industry Demand', chartType: 'bar', monthlyAgg: 'sum' as const,
           extract: (d) => {
             const v = d.gbb?.largeByState?.[state]?.[facility]
             return v ? { dates: d.gbb.dates, values: v } : null
@@ -129,7 +131,7 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
       defs.push({
         id: `prod-total|${state}`,
         label: `Gas Production Total · ${state}`,
-        unit: 'TJ/day', category: 'Gas Production', chartType: 'line',
+        unit: 'TJ/day', category: 'Gas Production', chartType: 'line', monthlyAgg: 'sum' as const,
         extract: (d) => {
           const facs = d.gbb?.prodByState?.[state]
           if (!facs) return null
@@ -145,7 +147,7 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
         defs.push({
           id: `prod|${state}|${facility}`,
           label: `Production · ${state} · ${facility}`,
-          unit: 'TJ/day', category: 'Gas Production', chartType: 'line',
+          unit: 'TJ/day', category: 'Gas Production', chartType: 'line', monthlyAgg: 'sum' as const,
           extract: (d) => {
             const v = d.gbb?.prodByState?.[state]?.[facility]
             return v ? { dates: d.gbb.dates, values: v } : null
@@ -161,7 +163,7 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
       defs.push({
         id: `storage-level|${facility}`,
         label: `Storage Level · ${facility} (${info.state})`,
-        unit: 'TJ', category: 'Gas Storage', chartType: 'line',
+        unit: 'TJ', category: 'Gas Storage', chartType: 'line', monthlyAgg: 'avg' as const,
         extract: (d) => {
           const v = d.gbb?.storageByFacility?.[facility]?.heldInStorage
           return v ? { dates: d.gbb.dates, values: v } : null
@@ -176,7 +178,7 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
       defs.push({
         id: `pipeline|${pipe}`,
         label: `Pipeline · ${pipe}`,
-        unit: 'TJ/day', category: 'Pipeline Flows', chartType: 'line',
+        unit: 'TJ/day', category: 'Pipeline Flows', chartType: 'line', monthlyAgg: 'sum' as const,
         extract: (d) => {
           const v = d.gbb?.pipelineFlows?.[pipe]?.flow
           return v ? { dates: d.gbb.dates, values: v } : null
@@ -190,19 +192,19 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
     defs.push({
       id: 'dwgm-weighted',
       label: 'DWGM Weighted Avg Price',
-      unit: '$/GJ', category: 'Gas Prices', chartType: 'line',
+      unit: '$/GJ', category: 'Gas Prices', chartType: 'line', monthlyAgg: 'avg' as const,
       extract: (d) => {
         const rows: any[] = d.prices?.dwgm ?? []
         return {
           dates:  rows.map((r: any) => r.date),
-          values: rows.map((r: any) => r.weightedAvg ?? null),
+          values: rows.map((r: any) => r.wdAvg ?? null),
         }
       },
     })
     defs.push({
       id: 'dwgm-scheduled',
       label: 'DWGM Scheduled Price',
-      unit: '$/GJ', category: 'Gas Prices', chartType: 'line',
+      unit: '$/GJ', category: 'Gas Prices', chartType: 'line', monthlyAgg: 'avg' as const,
       extract: (d) => {
         const rows: any[] = d.prices?.dwgm ?? []
         return {
@@ -219,11 +221,11 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
       defs.push({
         id: `sttm-${hub}`,
         label: `${label} Price`,
-        unit: '$/GJ', category: 'Gas Prices', chartType: 'line',
+        unit: '$/GJ', category: 'Gas Prices', chartType: 'line', monthlyAgg: 'avg' as const,
         extract: (d) => {
           const rows: any[] = d.prices?.[hub] ?? []
           return {
-            dates:  rows.map((r: any) => r.date),
+            dates:  rows.map((r: any) => r.gasDate),
             values: rows.map((r: any) => r.price ?? null),
           }
         },
@@ -237,7 +239,7 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
     defs.push({
       id: 'lng-total',
       label: 'LNG Export Total',
-      unit: 'TJ/day', category: 'LNG Export', chartType: 'bar',
+      unit: 'TJ/day', category: 'LNG Export', chartType: 'bar', monthlyAgg: 'sum' as const,
       extract: (d) => {
         const daily: any[] = d.lng?.daily ?? []
         const byDate: Record<string, number> = {}
@@ -250,7 +252,7 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
       defs.push({
         id: `lng|${facility}`,
         label: `LNG Export · ${facility}`,
-        unit: 'TJ/day', category: 'LNG Export', chartType: 'bar',
+        unit: 'TJ/day', category: 'LNG Export', chartType: 'bar', monthlyAgg: 'sum' as const,
         extract: (d) => {
           const daily: any[] = d.lng?.daily ?? []
           const byDate: Record<string, number> = {}
@@ -461,7 +463,8 @@ export default function CustomChartDashboard() {
         dates:     result.dates,
         values:    result.values,
         category:  def.category,
-        chartType: def.chartType,
+        chartType:  def.chartType,
+        monthlyAgg: def.monthlyAgg,
       }]
     })
   }, [selectedIds, catalogue, allData])
@@ -482,23 +485,38 @@ export default function CustomChartDashboard() {
   )
   const units = useMemo(() => Array.from(new Set(activeSeries.map(s => s.unit))), [activeSeries])
 
-  // Monthly aggregation
+  // Monthly aggregation — sums for flow/volume series, averages for levels and prices
   const MONTHS_CC = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const monthlyRows = useMemo(() => {
-    const byMonth: Record<string, Record<string, number>> = {}
+    // Accumulate sum + count per series per month
+    const byMonth: Record<string, Record<string, { sum: number; count: number }>> = {}
     for (const d of windowedDates) {
       const month = d.slice(0, 7)
       if (!byMonth[month]) byMonth[month] = {}
       const idx = allDates.indexOf(d)
       for (const s of activeSeries) {
-        byMonth[month][s.id] = (byMonth[month][s.id] ?? 0) + (aligned[s.id]?.[idx] ?? 0)
+        const v = aligned[s.id]?.[idx]
+        if (v == null) continue
+        if (!byMonth[month][s.id]) byMonth[month][s.id] = { sum: 0, count: 0 }
+        byMonth[month][s.id].sum   += v
+        byMonth[month][s.id].count += 1
       }
     }
     return Object.entries(byMonth)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([ym, vals]) => {
+      .map(([ym, acc]) => {
         const [y, m] = ym.split('-')
-        return { date: `${MONTHS_CC[parseInt(m??'1')-1]} ${(y??'').slice(2)}`, ...vals }
+        const row: Record<string, any> = {
+          date: `${MONTHS_CC[parseInt(m??'1')-1]} ${(y??'').slice(2)}`
+        }
+        for (const s of activeSeries) {
+          const a = acc[s.id]
+          if (!a) { row[s.id] = null; continue }
+          row[s.id] = s.monthlyAgg === 'avg'
+            ? Math.round((a.sum / a.count) * 100) / 100
+            : Math.round(a.sum * 10) / 10
+        }
+        return row
       })
   }, [windowedDates, allDates, aligned, activeSeries])
 
@@ -742,9 +760,16 @@ export default function CustomChartDashboard() {
                     <div style={{ display: 'flex', gap: '1rem', fontFamily: 'var(--font-data)', fontSize: '0.62rem' }}>
                       <span style={{ color: 'var(--muted)' }}>
                         ← <strong style={{ color: 'var(--text)' }}>{leftUnit}</strong>
+                        {viewMode === 'monthly' && activeSeries.find(s => axisMap[s.id] === 'left')?.monthlyAgg === 'avg'
+                          ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}> (avg)</span>
+                          : viewMode === 'monthly' ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}> (sum)</span> : null}
                       </span>
                       <span style={{ color: 'var(--muted)' }}>
-                        <strong style={{ color: 'var(--text)' }}>{rightUnit || leftUnit}</strong> →
+                        <strong style={{ color: 'var(--text)' }}>{rightUnit || leftUnit}</strong>
+                        {viewMode === 'monthly' && activeSeries.find(s => axisMap[s.id] === 'right')?.monthlyAgg === 'avg'
+                          ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}> (avg)</span>
+                          : viewMode === 'monthly' ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}> (sum)</span> : null}
+                        {' →'}
                       </span>
                     </div>
                   )}
@@ -820,7 +845,7 @@ export default function CustomChartDashboard() {
                                   </span>
                                   <span style={{ fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap' }}>
                                     {typeof p.value === 'number'
-                                      ? `${p.value.toFixed(s?.unit.includes('$') ? 2 : 1)} ${s?.unit ?? ''}`
+                                      ? `${p.value.toFixed(s?.unit.includes('$') ? 2 : 1)} ${s?.unit ?? ''}${viewMode === 'monthly' && s?.monthlyAgg === 'avg' ? ' avg' : viewMode === 'monthly' ? ' total' : ''}`
                                       : '—'}
                                   </span>
                                 </div>
