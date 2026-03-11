@@ -42,7 +42,7 @@ function fmtDateShort(d: string) {
 }
 
 // ── Range / View types ───────────────────────────────────────────────────────
-type DateRangeOption = 'all' | '1y' | '90d' | '30d' | '7d' | '3d'
+type DateRangeOption = 'all' | '1y' | '90d' | '30d' | '7d' | '3d' | 'custom'
 const DATE_RANGE_OPTIONS: { value: DateRangeOption; label: string }[] = [
   { value: 'all', label: 'All'    },
   { value: '1y',  label: '1 year' },
