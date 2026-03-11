@@ -196,20 +196,20 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
       extract: (d) => {
         const rows: any[] = d.prices?.dwgm ?? []
         return {
-          dates:  rows.map((r: any) => r.date),
+          dates:  rows.map((r: any) => r.gasDate),
           values: rows.map((r: any) => r.wdAvg ?? null),
         }
       },
     })
     defs.push({
-      id: 'dwgm-scheduled',
-      label: 'DWGM Scheduled Price',
+      id: 'dwgm-bod',
+      label: 'DWGM BOD Price',
       unit: '$/GJ', category: 'Gas Prices', chartType: 'line', monthlyAgg: 'avg' as const,
       extract: (d) => {
         const rows: any[] = d.prices?.dwgm ?? []
         return {
-          dates:  rows.map((r: any) => r.date),
-          values: rows.map((r: any) => r.scheduledPrice ?? null),
+          dates:  rows.map((r: any) => r.gasDate),
+          values: rows.map((r: any) => r.bod ?? null),
         }
       },
     })
