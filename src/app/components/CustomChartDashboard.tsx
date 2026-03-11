@@ -73,7 +73,7 @@ interface AllData {
 // Build all possible series definitions from available raw data
 function buildCatalogue(allData: AllData): SeriesDef[] {
   const defs: SeriesDef[] = []
-  const { gbb, prices, lng } = allData
+  const { gbb, prices, lng, elec } = allData
 
   // ── GBB: GPG demand by state+facility ──
   if (gbb?.gpgByState) {
