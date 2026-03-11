@@ -15,6 +15,22 @@ const SERIES_COLOURS = [
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
+function downloadCsv(rows: Record<string, any>[], filename: string) {
+  if (!rows.length) return
+  const cols = Object.keys(rows[0])
+  const header = cols.join(',')
+  const body   = rows.map(r => cols.map(c => {
+    const v = r[c] ?? ''
+    return typeof v === 'string' && v.includes(',') ? `"${v}"` : v
+  }).join(',')).join('\n')
+  const blob = new Blob([header + '\n' + body], { type: 'text/csv' })
+  const a    = document.createElement('a')
+  a.href     = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
 function fmtDate(d: string) {
   const [y, m, dd] = d.split('-')
   return `${parseInt(dd??'0')} ${MONTHS[parseInt(m??'1')-1]} ${(y??'').slice(2)}`
@@ -602,6 +618,20 @@ export default function CustomChartDashboard() {
 
   const ticks = useMemo(() => smartTicks(viewMode === 'monthly' ? monthlyRows.map(r => r.date as string) : windowedDates), [windowedDates, monthlyRows, viewMode])
 
+  // CSV export rows — flatten series into columns
+  const csvRows = useMemo(() => {
+    const rows = viewMode === 'monthly' ? monthlyRows : dailyRows
+    return rows.map(row => {
+      const out: Record<string, any> = { date: row.date }
+      for (const s of activeSeries) {
+        out[s.label] = row[s.id] ?? ''
+      }
+      return out
+    })
+  }, [viewMode, monthlyRows, dailyRows, activeSeries])
+
+  const csvFilename = `custom-chart-${viewMode}-${new Date().toISOString().slice(0,10)}.csv`
+
   const toggleSeries = useCallback((id: string) => {
     setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -754,6 +784,14 @@ export default function CustomChartDashboard() {
                   }}>×</button>
                 </div>
               ))}
+              {activeSeries.length > 0 && (
+                <button onClick={() => downloadCsv(csvRows, csvFilename)} style={{
+                  padding: '0.25rem 0.6rem', borderRadius: 20,
+                  border: '1px solid var(--accent)', background: 'transparent',
+                  fontFamily: 'var(--font-data)', fontSize: '0.65rem',
+                  color: 'var(--accent)', cursor: 'pointer', fontWeight: 500,
+                }}>↓ CSV</button>
+              )}
               {activeSeries.length > 1 && (
                 <button onClick={() => setSelectedIds([])} style={{
                   padding: '0.25rem 0.6rem', borderRadius: 20,

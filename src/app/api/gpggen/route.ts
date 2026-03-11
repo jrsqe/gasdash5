@@ -43,10 +43,11 @@ export async function GET() {
     }
 
     // 2. Fetch daily generation for each facility.
-    // The OE API returns raw energy values — each data point is the total MWh
-    // accumulated across all 5-min slots in the interval. At 1d that is directly MWh/day.
-    // (aggregateFacility in energyData.ts divides by FIVE_MIN_PERIODS to convert back to
-    // average MW — we skip that here and keep MWh.)
+    // The OE API with metrics='power' returns 5-minute averaged MW values.
+    // At interval='1d' the response contains 288 five-minute data points per day.
+    // To get MWh/day: sum all MW values for the day ÷ 288 (= avg MW) × 24h = MWh/day
+    // Equivalently: sum ÷ 12  (since 288 ÷ 24 = 12 five-min periods per hour)
+    const PERIODS_PER_HOUR = 12  // 60min ÷ 5min
     const facilityResults = await Promise.all(
       facilities.map(async fac => {
         try {
@@ -55,18 +56,25 @@ export async function GET() {
             metrics: 'power',
             interval: '1d',
           })
-          // Sum raw MWh per date across all units in the facility
-          const byDate: Record<string, number> = {}
+          // Sum all 5-min MW values per date, then convert to MWh
+          const byDateSum:   Record<string, number> = {}
+          const byDateCount: Record<string, number> = {}
           for (const series of resp.data ?? []) {
             for (const result of series.results ?? []) {
               for (const entry of result.data ?? []) {
                 if (!Array.isArray(entry) || entry.length < 2) continue
-                const mwh = Number(entry[1])
-                if (isNaN(mwh) || mwh < 0) continue
+                const mw = Number(entry[1])
+                if (isNaN(mw) || mw < 0) continue
                 const date = toDateAEST(String(entry[0]))
-                byDate[date] = (byDate[date] ?? 0) + mwh  // raw value IS MWh/day
+                byDateSum[date]   = (byDateSum[date]   ?? 0) + mw
+                byDateCount[date] = (byDateCount[date] ?? 0) + 1
               }
             }
+          }
+          // Convert: sum of MW values ÷ periods_per_hour = MWh
+          const byDate: Record<string, number> = {}
+          for (const date of Object.keys(byDateSum)) {
+            byDate[date] = byDateSum[date] / PERIODS_PER_HOUR
           }
           return { ...fac, byDate }
         } catch {
