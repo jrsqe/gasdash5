@@ -42,8 +42,11 @@ export async function GET() {
       }
     }
 
-    // 2. Fetch daily generation for each facility (MW at 1d interval = MWh/24 → ×24 = MWh/day)
-    // The API returns average MW over the interval. At 1d: MWh = MW × 24.
+    // 2. Fetch daily generation for each facility.
+    // The OE API returns raw energy values — each data point is the total MWh
+    // accumulated across all 5-min slots in the interval. At 1d that is directly MWh/day.
+    // (aggregateFacility in energyData.ts divides by FIVE_MIN_PERIODS to convert back to
+    // average MW — we skip that here and keep MWh.)
     const facilityResults = await Promise.all(
       facilities.map(async fac => {
         try {
@@ -52,16 +55,16 @@ export async function GET() {
             metrics: 'power',
             interval: '1d',
           })
-          // Accumulate MWh per date across all units in the facility
+          // Sum raw MWh per date across all units in the facility
           const byDate: Record<string, number> = {}
           for (const series of resp.data ?? []) {
             for (const result of series.results ?? []) {
               for (const entry of result.data ?? []) {
                 if (!Array.isArray(entry) || entry.length < 2) continue
-                const mwAvg = Number(entry[1])
-                if (isNaN(mwAvg) || mwAvg < 0) continue
+                const mwh = Number(entry[1])
+                if (isNaN(mwh) || mwh < 0) continue
                 const date = toDateAEST(String(entry[0]))
-                byDate[date] = (byDate[date] ?? 0) + mwAvg * 24  // MW × 24h = MWh
+                byDate[date] = (byDate[date] ?? 0) + mwh  // raw value IS MWh/day
               }
             }
           }

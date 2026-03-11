@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
@@ -92,7 +92,25 @@ function useWindow(dates: string[], dateRange: DateRangeOption) {
   }, [dateRange, dates])
 
   const [windowEnd, setWindowEnd] = useState(dates.length - 1)
-  useEffect(() => { setWindowEnd(dates.length - 1) }, [dateRange, dates])
+
+  // Use a stable key (first+last date) so windowEnd only resets when data
+  // actually changes, not on every new array reference from useMemo
+  const datesKey = dates.length > 0 ? `${dates[0]}|${dates[dates.length - 1]}|${dates.length}` : ''
+  const prevDatesKey = useRef(datesKey)
+  useEffect(() => {
+    if (prevDatesKey.current !== datesKey) {
+      prevDatesKey.current = datesKey
+      setWindowEnd(dates.length - 1)
+    }
+  })
+  // Also reset when dateRange changes
+  const prevRange = useRef(dateRange)
+  useEffect(() => {
+    if (prevRange.current !== dateRange) {
+      prevRange.current = dateRange
+      setWindowEnd(dates.length - 1)
+    }
+  })
 
   const sliced = useMemo(() => {
     if (dateRange === 'all') return dates
