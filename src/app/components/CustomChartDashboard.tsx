@@ -83,13 +83,14 @@ interface AllData {
   prices: any
   lng:    any
   elec:   any   // gpggen: { dates, byRegion } from /api/gpggen
+  spot:   any   // energy: { data: { NSW: { rows, facilities }, ... } } from /api/energy
 }
 
 // ── Series catalogue ──────────────────────────────────────────────────────────
 // Build all possible series definitions from available raw data
 function buildCatalogue(allData: AllData): SeriesDef[] {
   const defs: SeriesDef[] = []
-  const { gbb, prices, lng, elec } = allData
+  const { gbb, prices, lng, elec, spot } = allData
 
   // ── GBB: GPG demand by state+facility ──
   if (gbb?.gpgByState) {
@@ -337,19 +338,41 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
     }
   }
 
-  // ── Electricity spot prices ($/MWh) per NEM region ──
-  if (elec?.byRegion && elec?.dates) {
-    for (const [regionCode, regionData] of Object.entries(elec.byRegion as Record<string, any>)) {
-      const regionLabel = regionData.label as string
-      if (!regionData.elecPrices) continue
+  // ── Electricity spot prices ($/MWh) from /api/energy (1d interval) ──
+  // spot.data = { NSW: { rows: [{datetime, price, ...}], facilities: [] }, VIC: ..., QLD: ..., SA: ... }
+  const SPOT_REGIONS: Record<string, string> = { NSW: 'NSW', VIC: 'VIC', QLD: 'QLD', SA: 'SA' }
+  if (spot?.data && typeof spot.data === 'object') {
+    for (const [regionKey, regionLabel] of Object.entries(SPOT_REGIONS)) {
+      const regionData = spot.data[regionKey]
+      if (!regionData?.rows?.length) continue
+      // Extract date (YYYY-MM-DD) and price from rows, averaging any duplicate dates
+      const byDate: Record<string, { sum: number; count: number }> = {}
+      for (const row of regionData.rows) {
+        if (row.price == null) continue
+        const date = String(row.datetime).slice(0, 10)
+        if (!byDate[date]) byDate[date] = { sum: 0, count: 0 }
+        byDate[date].sum   += row.price
+        byDate[date].count += 1
+      }
+      const dates  = Object.keys(byDate).sort()
+      const values = dates.map(d => Math.round((byDate[d]!.sum / byDate[d]!.count) * 100) / 100)
+      if (!dates.length) continue
       defs.push({
-        id: `elec-price|${regionCode}`,
+        id: `elec-price|${regionKey}`,
         label: `Electricity Spot Price · ${regionLabel}`,
         unit: '$/MWh', category: 'Electricity Prices', chartType: 'line', monthlyAgg: 'avg' as const,
         extract: (d) => {
-          const rd = d.elec?.byRegion?.[regionCode]
-          if (!rd?.elecPrices) return null
-          return { dates: d.elec.dates, values: rd.elecPrices }
+          const rd = d.spot?.data?.[regionKey]
+          if (!rd?.rows?.length) return null
+          const bd: Record<string, { sum: number; count: number }> = {}
+          for (const row of rd.rows) {
+            if (row.price == null) continue
+            const date = String(row.datetime).slice(0, 10)
+            if (!bd[date]) bd[date] = { sum: 0, count: 0 }
+            bd[date].sum += row.price; bd[date].count += 1
+          }
+          const ds = Object.keys(bd).sort()
+          return { dates: ds, values: ds.map(dt => Math.round((bd[dt]!.sum / bd[dt]!.count) * 100) / 100) }
         },
       })
     }
@@ -468,6 +491,7 @@ let gbbCacheCC:    { data: any; at: number } | null = null
 let priceCacheCC:  { data: any; at: number } | null = null
 let lngCacheCC:    { data: any; at: number } | null = null
 let elecCacheCC:   { data: any; at: number } | null = null
+let spotCacheCC:   { data: any; at: number } | null = null
 const TTL = 60 * 60 * 1000
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -476,6 +500,7 @@ export default function CustomChartDashboard() {
   const [priceData,  setPriceData]  = useState<any>(null)
   const [lngData,    setLngData]    = useState<any>(null)
   const [elecData,   setElecData]   = useState<any>(null)
+  const [spotData,   setSpotData]   = useState<any>(null)
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState<string|null>(null)
 
@@ -493,7 +518,7 @@ export default function CustomChartDashboard() {
       setLoading(true)
       try {
         const now = Date.now()
-        const [gbbRes, priceRes, lngRes, elecRes] = await Promise.all([
+        const [gbbRes, priceRes, lngRes, elecRes, spotRes] = await Promise.all([
           gbbCacheCC && now - gbbCacheCC.at < TTL
             ? Promise.resolve(gbbCacheCC.data)
             : fetch('/api/gbb').then(r => r.json()).then(j => { if (j.ok) { gbbCacheCC = { data: j.data, at: Date.now() }; return j.data } throw new Error(j.error) }),
@@ -510,11 +535,19 @@ export default function CustomChartDashboard() {
                 if (j.ok) { elecCacheCC = { data: j.data, at: Date.now() }; return j.data }
                 throw new Error(j.error)
               }),
+          // Electricity spot prices from energy API (1d interval gives daily avg)
+          spotCacheCC && now - spotCacheCC.at < TTL
+            ? Promise.resolve(spotCacheCC.data)
+            : fetch('/api/energy?interval=1d').then(r => r.json()).then(j => {
+                if (j.ok) { spotCacheCC = { data: j.data, at: Date.now() }; return j.data }
+                throw new Error(j.error)
+              }),
         ])
         setGbbData(gbbRes)
         setPriceData(priceRes)
         setLngData(lngRes)
         setElecData(elecRes)
+        setSpotData(spotRes)
       } catch (e: any) { setError(e.message) }
       finally { setLoading(false) }
     }
