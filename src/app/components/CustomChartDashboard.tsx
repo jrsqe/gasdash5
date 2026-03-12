@@ -337,6 +337,24 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
     }
   }
 
+  // ── Electricity spot prices ($/MWh) per NEM region ──
+  if (elec?.byRegion && elec?.dates) {
+    for (const [regionCode, regionData] of Object.entries(elec.byRegion as Record<string, any>)) {
+      const regionLabel = regionData.label as string
+      if (!regionData.elecPrices) continue
+      defs.push({
+        id: `elec-price|${regionCode}`,
+        label: `Electricity Spot Price · ${regionLabel}`,
+        unit: '$/MWh', category: 'Electricity Prices', chartType: 'line', monthlyAgg: 'avg' as const,
+        extract: (d) => {
+          const rd = d.elec?.byRegion?.[regionCode]
+          if (!rd?.elecPrices) return null
+          return { dates: d.elec.dates, values: rd.elecPrices }
+        },
+      })
+    }
+  }
+
   return defs
 }
 

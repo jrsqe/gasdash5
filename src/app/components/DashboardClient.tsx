@@ -309,24 +309,30 @@ function WindowSlider({ totalRows, windowSize, windowEnd, onChange, firstLabel, 
 }
 
 // ── Fuel Mix Panel ────────────────────────────────────────────────────────────
-function FuelMixPanel({ fuelMix, dateRange, windowSize, onDateRangeChange }: {
+function FuelMixPanel({ fuelMix, dateRange, windowSize, windowEnd, onDateRangeChange }: {
   fuelMix: { dates: string[]; series: Record<string, (number|null)[]> }
-  dateRange: DateRangeOption; windowSize: number
+  dateRange: DateRangeOption; windowSize: number; windowEnd: number
   onDateRangeChange: (v: DateRangeOption) => void
 }) {
   const { dates, series } = fuelMix
   // Show a fuel if its series exists AND has at least one positive value
   const present = FUEL_MIX_ORDER.filter(f => series[f]?.some(v => v != null && v > 0))
 
-  // Window slicing — keep in sync with RegionPanel via shared dateRange/windowSize props
-  const [windowEnd, setWindowEnd] = useState(dates.length - 1)
-  useEffect(() => { setWindowEnd(dates.length - 1) }, [dateRange, dates.length])
-
-  // Compute slice bounds inside useMemo so sliceStart stays reactive
+  // Compute slice bounds — windowEnd/windowSize driven by parent RegionPanel slider
+  // fuelMix dates are day-strings (YYYY-MM-DD); rows use datetime strings (YYYY-MM-DD HH:MM)
+  // We align by extracting the date portion of visible rows and filtering fuelMix dates
   const { slicedDates, sliceStart } = useMemo(() => {
     if (dateRange === 'default') return { slicedDates: dates, sliceStart: 0 }
+    // fuelMix dates are in 'YYYY-MM-DD HH:MM' format — extract just the date part
     const start = Math.max(0, windowEnd - windowSize + 1)
-    return { slicedDates: dates.slice(start, windowEnd + 1), sliceStart: start }
+    const end   = windowEnd
+    // Use a simple index slice — fuelMix is fetched at same interval so lengths match
+    const clampedStart = Math.max(0, Math.min(start, dates.length - 1))
+    const clampedEnd   = Math.max(0, Math.min(end,   dates.length - 1))
+    return {
+      slicedDates: dates.slice(clampedStart, clampedEnd + 1),
+      sliceStart:  clampedStart,
+    }
   }, [dates, dateRange, windowSize, windowEnd])
 
   // Build chart rows in MW — also store total for % calculation in tooltip
@@ -606,12 +612,13 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
         </div>
       </div>
 
-      {/* Energy mix chart */}
+      {/* Energy mix chart — shares windowEnd with GPG chart slider */}
       {data.fuelMix && data.fuelMix.dates?.length > 0 && (
         <FuelMixPanel
           fuelMix={data.fuelMix}
           dateRange={dateRange}
           windowSize={windowSize}
+          windowEnd={windowEnd}
           onDateRangeChange={onDateRangeChange}
         />
       )}

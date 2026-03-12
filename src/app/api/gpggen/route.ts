@@ -83,12 +83,68 @@ export async function GET() {
       })
     )
 
-    // 3. Build union date list
+    // 3. Fetch daily average electricity spot price per region ($/MWh)
+    // Uses market/network/NEM with metrics='price' — returns 5-min prices
+    // Daily avg = sum of 5-min values ÷ count
+    const elecPriceByRegion: Record<string, Record<string, number>> = {}
+    await Promise.all(
+      REGIONS.map(async region => {
+        try {
+          const resp = await apiFetch(`${BASE_URL}/market/network/NEM`, {
+            metrics: 'price', network_region: region,
+            interval: '1d', primary_grouping: 'network_region',
+          })
+          const byDateSum:   Record<string, number> = {}
+          const byDateCount: Record<string, number> = {}
+          // Response may be history-style or results-style — handle both
+          for (const series of resp.data ?? []) {
+            const results = series.results ?? [series]
+            for (const item of results) {
+              // results-style: item.data = [[ts, val], ...]
+              if (Array.isArray(item.data)) {
+                for (const entry of item.data) {
+                  if (!Array.isArray(entry) || entry.length < 2) continue
+                  const val = Number(entry[1])
+                  if (isNaN(val)) continue
+                  const date = toDateAEST(String(entry[0]))
+                  byDateSum[date]   = (byDateSum[date]   ?? 0) + val
+                  byDateCount[date] = (byDateCount[date] ?? 0) + 1
+                }
+              }
+              // history-style
+              if (item.history?.start && Array.isArray(item.history.data)) {
+                const { start, data: vals } = item.history
+                const mins = 5
+                let dt = new Date(start)
+                for (const v of vals) {
+                  if (typeof v === 'number' && !isNaN(v)) {
+                    const date = toDateAEST(dt.toISOString())
+                    byDateSum[date]   = (byDateSum[date]   ?? 0) + v
+                    byDateCount[date] = (byDateCount[date] ?? 0) + 1
+                  }
+                  dt = new Date(dt.getTime() + mins * 60000)
+                }
+              }
+            }
+          }
+          const byDate: Record<string, number> = {}
+          for (const date of Object.keys(byDateSum)) {
+            if (byDateCount[date]) byDate[date] = byDateSum[date] / byDateCount[date]
+          }
+          elecPriceByRegion[region] = byDate
+        } catch (e) {
+          console.warn(`Elec price fetch failed for ${region}:`, e)
+          elecPriceByRegion[region] = {}
+        }
+      })
+    )
+
+    // 4. Build union date list
     const dateSet = new Set<string>()
     for (const f of facilityResults) Object.keys(f.byDate).forEach(d => dateSet.add(d))
     const dates = Array.from(dateSet).sort()
 
-    // 4. Shape output: byRegion → { facilities: { name, values[] }, stateTotalValues[] }
+    // 5. Shape output: byRegion → { facilities: { name, values[] }, stateTotalValues[] }
     const regionLabel: Record<string, string> = {
       NSW1: 'NSW', VIC1: 'VIC', QLD1: 'QLD', SA1: 'SA'
     }
@@ -96,6 +152,7 @@ export async function GET() {
       label: string
       facilities: { name: string; values: (number | null)[] }[]
       stateTotal: (number | null)[]
+      elecPrices: (number | null)[]
     }> = {}
 
     for (const region of REGIONS) {
@@ -109,7 +166,11 @@ export async function GET() {
         const sum = regionFacs.reduce((s, f) => s + (f.byDate[d] ?? 0), 0)
         return sum > 0 ? Math.round(sum) : null
       })
-      byRegion[region] = { label, facilities: facSeries, stateTotal }
+      const elecPrices = dates.map(d => {
+        const v = elecPriceByRegion[region]?.[d]
+        return v != null ? Math.round(v * 100) / 100 : null
+      })
+      byRegion[region] = { label, facilities: facSeries, stateTotal, elecPrices }
     }
 
     return NextResponse.json({ ok: true, data: { dates, byRegion } })
