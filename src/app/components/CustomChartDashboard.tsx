@@ -555,8 +555,8 @@ export default function CustomChartDashboard() {
   }, [])
 
   const allData: AllData = useMemo(() => ({
-    gbb: gbbData, prices: priceData, lng: lngData, elec: elecData,
-  }), [gbbData, priceData, lngData, elecData])
+    gbb: gbbData, prices: priceData, lng: lngData, elec: elecData, spot: spotData,
+  }), [gbbData, priceData, lngData, elecData, spotData])
 
   // Build catalogue from loaded data
   const catalogue = useMemo(() => buildCatalogue(allData), [allData])
