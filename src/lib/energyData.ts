@@ -49,7 +49,7 @@ async function fetchGasFacilities() {
   return result
 }
 
-function parseTimeseries(apiResponse: any): Record<string, [string, number][]> {
+export function parseTimeseries(apiResponse: any): Record<string, [string, number][]> {
   const result: Record<string, [string, number][]> = {}
   for (const series of apiResponse.data ?? []) {
     if (series.results) {
@@ -77,7 +77,7 @@ function parseTimeseries(apiResponse: any): Record<string, [string, number][]> {
   return result
 }
 
-function toAEST(isoString: string): string {
+export function toAEST(isoString: string): string {
   const d = new Date(isoString)
   return new Date(d.getTime() + 10 * 3600000).toISOString().replace('T', ' ').slice(0, 16)
 }

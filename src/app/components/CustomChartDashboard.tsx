@@ -531,12 +531,13 @@ export default function CustomChartDashboard() {
                 throw new Error(j.error)
               }),
           // Electricity spot prices — lightweight endpoint, prices only
-          spotCacheCC && now - spotCacheCC.at < TTL
+          // Wrapped in catch so a failure doesn't kill the whole Promise.all
+          (spotCacheCC && now - spotCacheCC.at < TTL
             ? Promise.resolve(spotCacheCC.data)
             : fetch('/api/elecprices').then(r => r.json()).then(j => {
                 if (j.ok) { spotCacheCC = { data: j.data, at: Date.now() }; return j.data }
-                throw new Error(j.error)
-              }),
+                console.warn('elecprices not ok:', j.error); return null
+              }).catch(e => { console.warn('elecprices fetch failed:', e); return null })),
         ])
         setGbbData(gbbRes)
         setPriceData(priceRes)
@@ -745,6 +746,15 @@ export default function CustomChartDashboard() {
               outline: 'none', marginBottom: '0.75rem',
             }}
           />
+
+          {/* Spot data load status — helps diagnose if electricity prices are missing */}
+          {!spotData && (
+            <div style={{ fontSize: '0.6rem', color: 'var(--muted)', fontFamily: 'var(--font-data)',
+              padding: '0.25rem 0.5rem', marginBottom: '0.5rem',
+              background: 'var(--surface-2)', borderRadius: 4, border: '1px solid var(--border)' }}>
+              ⚠ Electricity prices loading…
+            </div>
+          )}
 
           {/* Category groups */}
           {Object.entries(filteredCatalogue).map(([cat, defs]) => (
