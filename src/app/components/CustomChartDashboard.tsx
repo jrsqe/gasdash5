@@ -353,19 +353,20 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
   }
 
   // ── Electricity spot prices ($/MWh) from /api/elecprices ──
-  // spot.data = { NSW: { dates: string[], values: number[] }, VIC, QLD, SA }
+  // spot = { NSW: { dates: string[], values: number[] }, VIC, QLD, SA }
+  // (fetch stores j.data directly, so spot IS the region map — no .data wrapper)
   const SPOT_REGIONS = ['NSW', 'VIC', 'QLD', 'SA']
 
-  if (spot?.data && typeof spot.data === 'object') {
+  if (spot && typeof spot === 'object') {
     for (const regionKey of SPOT_REGIONS) {
-      const rd = (spot.data as any)[regionKey]
+      const rd = spot[regionKey]
       if (!rd?.dates?.length) continue
       defs.push({
         id: `elec-price|${regionKey}`,
         label: `Electricity Spot Price · ${regionKey}`,
         unit: '$/MWh', category: 'Electricity Prices', chartType: 'line', monthlyAgg: 'avg' as const,
         extract: (d) => {
-          const r = (d.spot?.data as any)?.[regionKey]
+          const r = d.spot?.[regionKey]
           if (!r?.dates?.length) return null
           return { dates: r.dates, values: r.values }
         },
