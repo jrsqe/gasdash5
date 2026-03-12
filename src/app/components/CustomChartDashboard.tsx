@@ -83,7 +83,7 @@ interface AllData {
   prices: any
   lng:    any
   elec:   any   // gpggen: { dates, byRegion } from /api/gpggen
-  spot:   any   // energy: { data: { NSW: { rows, facilities }, ... } } from /api/energy
+  spot:   any   // elecprices: { data: { NSW: { dates, values }, VIC, QLD, SA } } from /api/elecprices
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -352,25 +352,22 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
     }
   }
 
-  // ── Electricity spot prices ($/MWh) from /api/energy?interval=1h ──
-  // spot.data = { NSW: { rows: [{datetime:"YYYY-MM-DD HH:MM", price, ...}] }, VIC, QLD, SA }
-  // We aggregate hourly rows → daily average $/MWh
-  const SPOT_REGIONS: Record<string, string> = { NSW: 'NSW', VIC: 'VIC', QLD: 'QLD', SA: 'SA' }
+  // ── Electricity spot prices ($/MWh) from /api/elecprices ──
+  // spot.data = { NSW: { dates: string[], values: number[] }, VIC, QLD, SA }
+  const SPOT_REGIONS = ['NSW', 'VIC', 'QLD', 'SA']
 
   if (spot?.data && typeof spot.data === 'object') {
-    for (const [regionKey, regionLabel] of Object.entries(SPOT_REGIONS)) {
-      const regionData = (spot.data as any)[regionKey]
-      if (!regionData?.rows?.length) continue
-      const preview = dailyAvgPrices(regionData.rows)
-      if (!preview.dates.length) continue
+    for (const regionKey of SPOT_REGIONS) {
+      const rd = (spot.data as any)[regionKey]
+      if (!rd?.dates?.length) continue
       defs.push({
         id: `elec-price|${regionKey}`,
-        label: `Electricity Spot Price · ${regionLabel}`,
+        label: `Electricity Spot Price · ${regionKey}`,
         unit: '$/MWh', category: 'Electricity Prices', chartType: 'line', monthlyAgg: 'avg' as const,
         extract: (d) => {
-          const rd = (d.spot?.data as any)?.[regionKey]
-          if (!rd?.rows?.length) return null
-          return dailyAvgPrices(rd.rows)
+          const r = (d.spot?.data as any)?.[regionKey]
+          if (!r?.dates?.length) return null
+          return { dates: r.dates, values: r.values }
         },
       })
     }
@@ -533,10 +530,10 @@ export default function CustomChartDashboard() {
                 if (j.ok) { elecCacheCC = { data: j.data, at: Date.now() }; return j.data }
                 throw new Error(j.error)
               }),
-          // Electricity spot prices from energy API (1d interval gives daily avg)
+          // Electricity spot prices — lightweight endpoint, prices only
           spotCacheCC && now - spotCacheCC.at < TTL
             ? Promise.resolve(spotCacheCC.data)
-            : fetch('/api/energy?interval=1h').then(r => r.json()).then(j => {
+            : fetch('/api/elecprices').then(r => r.json()).then(j => {
                 if (j.ok) { spotCacheCC = { data: j.data, at: Date.now() }; return j.data }
                 throw new Error(j.error)
               }),
