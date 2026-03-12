@@ -86,6 +86,20 @@ interface AllData {
   spot:   any   // energy: { data: { NSW: { rows, facilities }, ... } } from /api/energy
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function dailyAvgPrices(rows: any[]): { dates: string[]; values: number[] } {
+  const byDate: Record<string, { sum: number; n: number }> = {}
+  for (const row of rows) {
+    if (row.price == null) continue
+    const date = String(row.datetime).slice(0, 10)
+    if (!byDate[date]) byDate[date] = { sum: 0, n: 0 }
+    byDate[date].sum += row.price
+    byDate[date].n   += 1
+  }
+  const dates = Object.keys(byDate).sort()
+  return { dates, values: dates.map(d => Math.round(byDate[d]!.sum / byDate[d]!.n * 100) / 100) }
+}
+
 // ── Series catalogue ──────────────────────────────────────────────────────────
 // Build all possible series definitions from available raw data
 function buildCatalogue(allData: AllData): SeriesDef[] {
@@ -338,41 +352,25 @@ function buildCatalogue(allData: AllData): SeriesDef[] {
     }
   }
 
-  // ── Electricity spot prices ($/MWh) from /api/energy (1d interval) ──
-  // spot.data = { NSW: { rows: [{datetime, price, ...}], facilities: [] }, VIC: ..., QLD: ..., SA: ... }
+  // ── Electricity spot prices ($/MWh) from /api/energy?interval=1h ──
+  // spot.data = { NSW: { rows: [{datetime:"YYYY-MM-DD HH:MM", price, ...}] }, VIC, QLD, SA }
+  // We aggregate hourly rows → daily average $/MWh
   const SPOT_REGIONS: Record<string, string> = { NSW: 'NSW', VIC: 'VIC', QLD: 'QLD', SA: 'SA' }
+
   if (spot?.data && typeof spot.data === 'object') {
     for (const [regionKey, regionLabel] of Object.entries(SPOT_REGIONS)) {
-      const regionData = spot.data[regionKey]
+      const regionData = (spot.data as any)[regionKey]
       if (!regionData?.rows?.length) continue
-      // Extract date (YYYY-MM-DD) and price from rows, averaging any duplicate dates
-      const byDate: Record<string, { sum: number; count: number }> = {}
-      for (const row of regionData.rows) {
-        if (row.price == null) continue
-        const date = String(row.datetime).slice(0, 10)
-        if (!byDate[date]) byDate[date] = { sum: 0, count: 0 }
-        byDate[date].sum   += row.price
-        byDate[date].count += 1
-      }
-      const dates  = Object.keys(byDate).sort()
-      const values = dates.map(d => Math.round((byDate[d]!.sum / byDate[d]!.count) * 100) / 100)
-      if (!dates.length) continue
+      const preview = dailyAvgPrices(regionData.rows)
+      if (!preview.dates.length) continue
       defs.push({
         id: `elec-price|${regionKey}`,
         label: `Electricity Spot Price · ${regionLabel}`,
         unit: '$/MWh', category: 'Electricity Prices', chartType: 'line', monthlyAgg: 'avg' as const,
         extract: (d) => {
-          const rd = d.spot?.data?.[regionKey]
+          const rd = (d.spot?.data as any)?.[regionKey]
           if (!rd?.rows?.length) return null
-          const bd: Record<string, { sum: number; count: number }> = {}
-          for (const row of rd.rows) {
-            if (row.price == null) continue
-            const date = String(row.datetime).slice(0, 10)
-            if (!bd[date]) bd[date] = { sum: 0, count: 0 }
-            bd[date].sum += row.price; bd[date].count += 1
-          }
-          const ds = Object.keys(bd).sort()
-          return { dates: ds, values: ds.map(dt => Math.round((bd[dt]!.sum / bd[dt]!.count) * 100) / 100) }
+          return dailyAvgPrices(rd.rows)
         },
       })
     }
@@ -538,7 +536,7 @@ export default function CustomChartDashboard() {
           // Electricity spot prices from energy API (1d interval gives daily avg)
           spotCacheCC && now - spotCacheCC.at < TTL
             ? Promise.resolve(spotCacheCC.data)
-            : fetch('/api/energy?interval=1d').then(r => r.json()).then(j => {
+            : fetch('/api/energy?interval=1h').then(r => r.json()).then(j => {
                 if (j.ok) { spotCacheCC = { data: j.data, at: Date.now() }; return j.data }
                 throw new Error(j.error)
               }),
