@@ -303,6 +303,193 @@ function DailyFacilityChart({ daily, facilities }: {
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
+
+// ── Utilisation chart ─────────────────────────────────────────────────────────
+function UtilisationChart({ daily, facilities, nameplateCap }: {
+  daily:        LngData['daily']
+  facilities:   string[]
+  nameplateCap: Record<string, number | null>
+}) {
+  const [days, setDays] = useState<90 | 180 | 365 | 9999>(365)
+
+  // Only show facilities that have a nameplate capacity
+  const facWithCap = facilities.filter(f => (nameplateCap[f] ?? 0) > 0)
+
+  const rows = useMemo(() => {
+    const byDate: Record<string, Record<string, number>> = {}
+    for (const d of daily) {
+      if (!byDate[d.date]) byDate[d.date] = {}
+      byDate[d.date][d.facility] = (byDate[d.date][d.facility] ?? 0) + d.demand
+    }
+    const allDates = Object.keys(byDate).sort()
+    const cutoff   = days === 9999 ? allDates[0] : allDates[allDates.length - days] ?? allDates[0]
+    return allDates
+      .filter(dt => dt >= cutoff)
+      .map(dt => {
+        const row: Record<string, any> = { date: fmtDate(dt), rawDate: dt }
+        for (const f of facWithCap) {
+          const cap = nameplateCap[f]
+          const act = byDate[dt]?.[f] ?? null
+          row[f] = (act != null && cap) ? Math.min(100, Math.round(act / cap * 1000) / 10) : null
+        }
+        // Combined utilisation: sum actual / sum capacity
+        const totalAct = facWithCap.reduce((s, f) => s + (byDate[dt]?.[f] ?? 0), 0)
+        const totalCap = facWithCap.reduce((s, f) => s + (nameplateCap[f] ?? 0), 0)
+        row.__combined = totalCap > 0 ? Math.min(100, Math.round(totalAct / totalCap * 1000) / 10) : null
+        return row
+      })
+  }, [daily, facWithCap, nameplateCap, days])
+
+  // Summary stats
+  const avgUtil = useMemo(() => {
+    const vals = rows.map(r => r.__combined).filter((v): v is number => v != null)
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null
+  }, [rows])
+
+  const peakUtil = useMemo(() => {
+    const vals = rows.map(r => r.__combined).filter((v): v is number => v != null)
+    return vals.length ? Math.max(...vals) : null
+  }, [rows])
+
+  const WINDOW_OPTS = [
+    { v: 90,   label: '3 months' },
+    { v: 180,  label: '6 months' },
+    { v: 365,  label: '1 year'   },
+    { v: 9999, label: 'All'      },
+  ] as const
+
+  if (facWithCap.length === 0) return (
+    <div className="sq-card" style={{ padding: '1.25rem', marginBottom: '0.75rem' }}>
+      <p style={{ color: 'var(--muted)', fontFamily: 'var(--font-data)', fontSize: '0.75rem', margin: 0 }}>
+        Nameplate capacity data not available for LNG facilities.
+      </p>
+    </div>
+  )
+
+  return (
+    <div className="sq-card" style={{ padding: '1.25rem', marginBottom: '0.75rem' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+          <h3 style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)', margin: 0 }}>
+            LNG Export Utilisation
+          </h3>
+          <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-data)', fontSize: '0.62rem' }}>
+            % of nameplate capacity
+          </span>
+        </div>
+        <div style={{ display: 'flex', background: 'var(--surface-2)', border: '1px solid var(--border)',
+          borderRadius: 8, padding: 2, gap: 2 }}>
+          {WINDOW_OPTS.map(({ v, label }) => (
+            <button key={v} onClick={() => setDays(v)} style={{
+              padding: '0.25rem 0.65rem', borderRadius: 6, border: 'none', cursor: 'pointer',
+              fontFamily: 'var(--font-ui)', fontSize: '0.72rem', fontWeight: days === v ? 600 : 400,
+              background: days === v ? 'var(--accent)' : 'transparent',
+              color: days === v ? '#fff' : 'var(--muted)', transition: 'all 0.15s',
+            }}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: '0.6rem', marginBottom: '1.1rem' }}>
+        <div style={{ padding: '0.5rem 0.75rem', background: 'var(--bg)',
+          border: '1px solid var(--border)', borderLeft: '3px solid var(--accent)', borderRadius: 5 }}>
+          <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.58rem', color: 'var(--muted)',
+            textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3, fontWeight: 600 }}>
+            Avg Combined Utilisation
+          </div>
+          <div style={{ fontFamily: 'var(--font-data)', fontSize: '1.1rem', fontWeight: 700,
+            color: 'var(--accent)', lineHeight: 1 }}>
+            {avgUtil != null ? `${avgUtil}%` : '—'}
+          </div>
+          <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)', marginTop: 2 }}>
+            of total nameplate
+          </div>
+        </div>
+        <div style={{ padding: '0.5rem 0.75rem', background: 'var(--bg)',
+          border: '1px solid var(--border)', borderLeft: '3px solid var(--accent)', borderRadius: 5 }}>
+          <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.58rem', color: 'var(--muted)',
+            textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3, fontWeight: 600 }}>
+            Peak Combined Utilisation
+          </div>
+          <div style={{ fontFamily: 'var(--font-data)', fontSize: '1.1rem', fontWeight: 700,
+            color: 'var(--accent)', lineHeight: 1 }}>
+            {peakUtil != null ? `${peakUtil}%` : '—'}
+          </div>
+          <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)', marginTop: 2 }}>
+            in selected window
+          </div>
+        </div>
+        {facWithCap.map(f => (
+          <div key={f} style={{ padding: '0.5rem 0.75rem', background: 'var(--bg)',
+            border: '1px solid var(--border)', borderLeft: `3px solid ${FACILITY_COLOURS[facilities.indexOf(f) % FACILITY_COLOURS.length]}`, borderRadius: 5 }}>
+            <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.58rem', color: 'var(--muted)',
+              textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3, fontWeight: 600 }}>
+              {f}
+            </div>
+            <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.85rem', fontWeight: 700,
+              color: FACILITY_COLOURS[facilities.indexOf(f) % FACILITY_COLOURS.length], lineHeight: 1 }}>
+              {nameplateCap[f] != null ? `${nameplateCap[f]} TJ/day nameplate` : 'no capacity data'}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem 1rem', marginBottom: '0.75rem' }}>
+        {facWithCap.map((f, i) => (
+          <span key={f} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem',
+            fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--text)' }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2,
+              background: FACILITY_COLOURS[facilities.indexOf(f) % FACILITY_COLOURS.length] }} />
+            {f}
+          </span>
+        ))}
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem',
+          fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)' }}>
+          <span style={{ display: 'inline-block', width: 10, height: 2,
+            background: 'var(--muted)', borderTop: '2px dashed var(--muted)' }} />
+          100% capacity
+        </span>
+      </div>
+
+      {/* Chart */}
+      <ResponsiveContainer width="100%" height={260}>
+        <LineChart data={rows} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 9, fontFamily: 'var(--font-data)' }}
+            interval={Math.max(0, Math.floor(rows.length / 10) - 1)} />
+          <YAxis tick={{ fill: '#555', fontSize: 9, fontFamily: 'var(--font-data)' }}
+            domain={[0, 110]} tickFormatter={v => `${v}%`} width={36} />
+          {/* 100% reference line */}
+          <ReferenceLine y={100} stroke="var(--muted)" strokeDasharray="4 3" strokeWidth={1} />
+          <Tooltip
+            contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 8, fontFamily: 'var(--font-data)', fontSize: '0.72rem' }}
+            formatter={(v: any, name: string) => [`${v}%`, name === '__combined' ? 'Combined' : name]}
+          />
+          {facWithCap.map(f => (
+            <Line key={f} type="monotone" dataKey={f}
+              stroke={FACILITY_COLOURS[facilities.indexOf(f) % FACILITY_COLOURS.length]}
+              strokeWidth={1.5} dot={false} connectNulls />
+          ))}
+          <Line type="monotone" dataKey="__combined" name="Combined"
+            stroke="var(--text)" strokeWidth={2} strokeDasharray="5 3"
+            dot={false} connectNulls />
+        </LineChart>
+      </ResponsiveContainer>
+
+      <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-data)', fontSize: '0.6rem',
+        color: 'var(--muted)' }}>
+        Nameplate capacity from AEMO GasBBNameplateRatingCurrent.csv · dashed line = combined utilisation
+      </div>
+    </div>
+  )
+}
+
 export default function LngDashboard() {
   const [data,    setData]    = useState<LngData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -340,7 +527,7 @@ export default function LngDashboard() {
     </div>
   )
 
-  const { daily, facilities, monthly } = data
+  const { daily, facilities, monthly, nameplateCap } = data
 
   // Date range banner
   const firstDate = daily[0]?.date ?? ''
@@ -363,6 +550,7 @@ export default function LngDashboard() {
 
       <MonthlyTotalChart monthly={monthly} facilities={facilities} />
       <DailyFacilityChart daily={daily} facilities={facilities} />
+      <UtilisationChart daily={daily} facilities={facilities} nameplateCap={nameplateCap} />
 
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem',
         fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--muted)',

@@ -524,6 +524,8 @@ export interface LngData {
   facilities:   string[]
   // Monthly aggregates: { "2024-03": { total: number, byFacility: Record<string, number> } }
   monthly:      Record<string, { total: number; byFacility: Record<string, number> }>
+  // Nameplate capacity per facility (TJ/day), null if not found
+  nameplateCap: Record<string, number | null>
 }
 
 export async function getLngData(): Promise<LngData> {
@@ -554,5 +556,67 @@ export async function getLngData(): Promise<LngData> {
       (monthly[month].byFacility[row.facility] ?? 0) + row.demand
   }
 
-  return { daily, facilities, monthly }
+  // ── Nameplate capacities from GasBBNameplateRatingCurrent.csv ──────────────
+  // Reuse the same CSV already fetched for pipelines. LNG facilities appear with
+  // facilitytype = 'LNGEXPORT'. We try capacitytype 'MDQ' first, then any type.
+  const nameplateCap: Record<string, number | null> = {}
+  for (const f of facilities) nameplateCap[f] = null
+
+  try {
+    const npRes  = await fetch(NP_URL, { cache: 'no-store' })
+    const npText = await npRes.text()
+
+    function splitLine(line: string): string[] {
+      const result: string[] = []
+      let cur = '', inQ = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (ch === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++ } else inQ = !inQ }
+        else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = '' }
+        else cur += ch
+      }
+      result.push(cur.trim())
+      return result
+    }
+
+    const lines   = npText.split('\n').filter(l => l.trim())
+    const headers = splitLine(lines[0])
+    const col     = (name: string) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase())
+
+    const iFac  = col('facilityname')
+    const iType = col('facilitytype')
+    const iCt   = col('capacitytype')
+    const iCap  = col('capacityquantity')
+
+    const npRows = lines.slice(1).map(l => splitLine(l))
+
+    // LNG export rows — facilitytype LNGEXPORT, prefer MDQ capacity type
+    const lngNpRows = npRows.filter(r =>
+      r[iType]?.toUpperCase() === 'LNGEXPORT'
+    )
+
+    for (const facility of facilities) {
+      // Match on facility name (case-insensitive, partial match fallback)
+      const facUpper = facility.toUpperCase()
+      const matching = lngNpRows.filter(r =>
+        r[iFac]?.toUpperCase() === facUpper ||
+        r[iFac]?.toUpperCase().includes(facUpper) ||
+        facUpper.includes(r[iFac]?.toUpperCase() ?? '')
+      )
+
+      // Prefer MDQ rows, fall back to any
+      const mdqRows = matching.filter(r => r[iCt]?.toUpperCase() === 'MDQ')
+      const candidates = mdqRows.length > 0 ? mdqRows : matching
+
+      const caps = candidates
+        .map(r => parseFloat(r[iCap]))
+        .filter(v => !isNaN(v) && v > 0)
+
+      nameplateCap[facility] = caps.length > 0 ? Math.max(...caps) : null
+    }
+  } catch (e) {
+    console.warn('LNG nameplate fetch error:', e)
+  }
+
+  return { daily, facilities, monthly, nameplateCap }
 }
