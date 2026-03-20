@@ -10,7 +10,7 @@ interface RegionData {
   dates:          string[]
   totalIntervals: (number | null)[]
   byFuelGroup:    Record<string, (number | null)[]>
-  byGasDuid:      Record<string, { intervals: (number | null)[]; name: string }>
+  byGasDuid:      Record<string, (number | null)[]>
 }
 
 // ── Colours ───────────────────────────────────────────────────────────────────
@@ -135,10 +135,10 @@ function FuelShareChart({ regionData, region }: { regionData: RegionData; region
 // ── Gas DUID breakdown ─────────────────────────────────────────────────────────
 function GasDuidChart({ regionData, region }: { regionData: RegionData; region: string }) {
   const duids = Object.entries(regionData.byGasDuid)
-    .filter(([, v]) => v.intervals.some(x => x != null && x > 0))
+    .filter(([, vals]) => vals.some(x => x != null && x > 0))
     .sort(([, a], [, b]) => {
-      const sumA = a.intervals.reduce((s: number, v) => s + (v ?? 0), 0)
-      const sumB = b.intervals.reduce((s: number, v) => s + (v ?? 0), 0)
+      const sumA = a.reduce((s: number, v) => s + (v ?? 0), 0)
+      const sumB = b.reduce((s: number, v) => s + (v ?? 0), 0)
       return sumB - sumA
     })
 
@@ -146,7 +146,7 @@ function GasDuidChart({ regionData, region }: { regionData: RegionData; region: 
     return regionData.dates.map((date, i) => {
       const total = regionData.totalIntervals[i] ?? 0
       const row: Record<string, any> = { date: fmtDate(date), total }
-      for (const [duid, { intervals }] of duids) {
+      for (const [duid, intervals] of duids) {
         const count = intervals[i] ?? 0
         row[duid] = total > 0 ? Math.round(count / total * 1000) / 10 : 0
       }
@@ -176,7 +176,7 @@ function GasDuidChart({ regionData, region }: { regionData: RegionData; region: 
       {/* DUID summary table */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
         gap: '0.4rem', marginBottom: '1rem' }}>
-        {duids.slice(0, 8).map(([duid, { intervals, name }], i) => {
+        {duids.slice(0, 8).map(([duid, intervals], i) => {
           const total = intervals.reduce((s: number, v) => s + (v ?? 0), 0)
           const recent = intervals[intervals.length - 1] ?? null
           const recentTotal = regionData.totalIntervals[regionData.totalIntervals.length - 1] ?? 0
@@ -190,11 +190,7 @@ function GasDuidChart({ regionData, region }: { regionData: RegionData; region: 
             }}>
               <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', fontWeight: 700,
                 color: GAS_DUID_PALETTE[i % GAS_DUID_PALETTE.length] }}>{duid}</div>
-              <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)',
-                marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {name}
-              </div>
-              <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.75rem', color: 'var(--text)' }}>
+              <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.75rem', color: 'var(--text)', marginTop: 2 }}>
                 {total} intervals total
               </div>
               {recentPct != null && (
@@ -209,13 +205,12 @@ function GasDuidChart({ regionData, region }: { regionData: RegionData; region: 
 
       {/* Legend */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem 0.9rem', marginBottom: '0.75rem' }}>
-        {duids.slice(0, 8).map(([duid, { name }], i) => (
+        {duids.slice(0, 8).map(([duid], i) => (
           <span key={duid} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem',
             fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--text)' }}>
             <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2,
               background: GAS_DUID_PALETTE[i % GAS_DUID_PALETTE.length] }} />
             {duid}
-            <span style={{ color: 'var(--muted)', fontSize: '0.58rem' }}>({name.split(' ').slice(-1)[0]})</span>
           </span>
         ))}
       </div>

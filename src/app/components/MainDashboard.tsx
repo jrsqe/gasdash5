@@ -9,9 +9,8 @@ const GpgProfileDashboard   = dynamic(() => import('./GpgProfileDashboard'),   {
 const GasPriceDashboard     = dynamic(() => import('./GasPriceDashboard'),     { ssr: false })
 const LngDashboard          = dynamic(() => import('./LngDashboard'),          { ssr: false })
 const CustomChartDashboard  = dynamic(() => import('./CustomChartDashboard'),  { ssr: false })
-const PriceSetterDashboard  = dynamic(() => import('./PriceSetterDashboard'),  { ssr: false })
 
-type TopTab = 'electricity' | 'gas' | 'gpg-profile' | 'gas-prices' | 'lng' | 'custom' | 'price-setter'
+type TopTab = 'electricity' | 'gas' | 'gpg-profile' | 'gas-prices' | 'lng' | 'custom'
 
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 
@@ -127,7 +126,6 @@ export default function MainDashboard() {
           { key: 'gas-prices',  label: 'Gas Prices' },
           { key: 'lng',        label: 'LNG Export' },
           { key: 'custom',    label: 'Custom Chart' },
-          { key: 'price-setter', label: 'Price Setter' },
         ] as { key: TopTab; label: string }[]).map(({ key, label }) => {
           const isActive = tab === key
           return (
@@ -160,10 +158,7 @@ export default function MainDashboard() {
       <div style={{ display: tab === 'lng' ? 'block' : 'none' }}>
         <LngDashboard />
       </div>
-      <div style={{ display: tab === 'price-setter' ? 'block' : 'none' }}>
-        <PriceSetterDashboard />
-      </div>
-      <div style={{ display: tab === 'gas' ? 'block' : 'none' }}>
+<div style={{ display: tab === 'gas' ? 'block' : 'none' }}>
         <div style={{ maxWidth: 1400, margin: '0 auto', padding: '1.5rem' }}>
           <GbbDashboard />
         </div>
@@ -176,7 +171,7 @@ export default function MainDashboard() {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)' }}>
-          {tab === 'gas' || tab === 'lng' ? 'AEMO Gas Bulletin Board · nemweb.com.au' : tab === 'gas-prices' ? 'AEMO DWGM · STTM · nemweb.com.au' : tab === 'price-setter' ? 'AEMO NEMWeb Public_Prices · nemweb.com.au' : 'Open Electricity API · openelectricity.org.au'}
+          {tab === 'gas' || tab === 'lng' ? 'AEMO Gas Bulletin Board · nemweb.com.au' : tab === 'gas-prices' ? 'AEMO DWGM · STTM · nemweb.com.au' : 'Open Electricity API · openelectricity.org.au'}
         </span>
         <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)', letterSpacing: '0.04em' }}>
           Data refreshes hourly
