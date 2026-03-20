@@ -494,181 +494,124 @@ const PS_FUEL_ORDER = ['Gas', 'Coal', 'Wind', 'Solar', 'Hydro', 'Battery', 'Liqu
 const PS_GAS_PALETTE = ['#FF9F0A','#FFCC02','#FF6B35','#FF453A','#E8602C','#FFD60A','#FF8C00','#FFA500']
 
 interface PSRegionData {
-  dates:          string[]
-  totalIntervals: (number | null)[]
-  byFuelGroup:    Record<string, (number | null)[]>
-  byGasDuid:      Record<string, (number | null)[]>
+  dates:    string[]
+  avgPrice: (number | null)[]
+  pctAbove: Record<string, (number | null)[]>  // key = threshold as string
 }
 
 function fmtPsDate(iso: string) {
   const [, mm, dd] = iso.split('-'); return `${dd}/${mm}`
 }
 
-function FuelShareChart({ psData, region }: { psData: PSRegionData; region: string }) {
+const THRESHOLD_COLOURS: Record<string, string> = {
+  '100':  '#FF9F0A',
+  '300':  '#FF6B35',
+  '1000': '#FF453A',
+}
+const THRESHOLD_LABELS: Record<string, string> = {
+  '100':  '> $100',
+  '300':  '> $300',
+  '1000': '> $1,000',
+}
+
+function PriceSpikeChart({ psData, region }: { psData: PSRegionData; region: string }) {
+  const thresholds = ['100', '300', '1000']
   const rows = useMemo(() => psData.dates.map((date, i) => {
-    const total = psData.totalIntervals[i] ?? 0
-    const row: Record<string, any> = { date: fmtPsDate(date), total }
-    for (const fg of PS_FUEL_ORDER) {
-      const count = psData.byFuelGroup[fg]?.[i] ?? 0
-      row[fg] = total > 0 ? Math.round(count / total * 1000) / 10 : 0
+    const row: Record<string, any> = {
+      date: fmtPsDate(date),
+      avg:  psData.avgPrice[i] ?? null,
     }
+    for (const t of thresholds) row[t] = psData.pctAbove[t]?.[i] ?? null
     return row
   }), [psData])
 
-  const presentFuels = PS_FUEL_ORDER.filter(fg => rows.some(r => (r[fg] ?? 0) > 0))
-  const gasVals = rows.map(r => r['Gas'] ?? 0).filter((v: number) => v > 0)
-  const avgGas  = gasVals.length ? Math.round(gasVals.reduce((a: number, b: number) => a + b, 0) / gasVals.length * 10) / 10 : null
-  const maxGas  = gasVals.length ? Math.max(...gasVals) : null
-  const recentGas = rows[rows.length - 1]?.['Gas'] ?? null
+  const avgVals   = psData.avgPrice.filter((v): v is number => v != null)
+  const overallAvg = avgVals.length ? Math.round(avgVals.reduce((a, b) => a + b, 0) / avgVals.length) : null
+  const latestAvg  = psData.avgPrice[psData.avgPrice.length - 1]
+
+  const highPct    = psData.pctAbove['300']?.filter((v): v is number => v != null) ?? []
+  const avgHighPct = highPct.length ? Math.round(highPct.reduce((a: number, b) => a + b, 0) / highPct.length * 10) / 10 : null
 
   return (
-    <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
-      <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between',
-        marginBottom:'0.75rem', flexWrap:'wrap', gap:'0.5rem' }}>
-        <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem' }}>
-          <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>
-            Price Setter by Fuel Type · {region}
+    <div className="sq-card" style={{ padding: '1.25rem', marginBottom: '0.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+        marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+          <h3 style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)', margin: 0 }}>
+            Electricity Price Spikes · {region}
           </h3>
-          <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>
-            % of 5-min dispatch intervals · last 7 days
+          <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-data)', fontSize: '0.62rem' }}>
+            % of 5-min intervals above threshold · last 7 days
           </span>
         </div>
       </div>
-      <div style={{ display:'flex', gap:'0.5rem', marginBottom:'1rem', flexWrap:'wrap' }}>
+
+      {/* Stat cards */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         {[
-          { label: 'Latest gas share', value: recentGas != null ? `${recentGas}%` : '—' },
-          { label: 'Avg gas share',    value: avgGas    != null ? `${avgGas}%`    : '—' },
-          { label: 'Peak gas share',   value: maxGas    != null ? `${maxGas}%`    : '—' },
+          { label: 'Avg price (latest day)', value: latestAvg != null ? `$${Math.round(latestAvg)}/MWh` : '—' },
+          { label: 'Avg price (7 days)',     value: overallAvg != null ? `$${overallAvg}/MWh` : '—' },
+          { label: 'Intervals > $300 avg',   value: avgHighPct != null ? `${avgHighPct}%` : '—' },
         ].map(({ label, value }) => (
-          <div key={label} style={{ padding:'0.35rem 0.7rem', background:'var(--bg)',
-            border:'1px solid var(--border)', borderLeft:`3px solid ${PS_FUEL_COLOURS['Gas']}`, borderRadius:5 }}>
-            <div style={{ fontFamily:'var(--font-data)', fontSize:'0.58rem', color:'var(--muted)',
-              textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:2 }}>{label}</div>
-            <div style={{ fontFamily:'var(--font-data)', fontSize:'1rem', fontWeight:700,
-              color:PS_FUEL_COLOURS['Gas'] }}>{value}</div>
+          <div key={label} style={{ padding: '0.35rem 0.7rem', background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderLeft: `3px solid ${THRESHOLD_COLOURS['300']}`, borderRadius: 5 }}>
+            <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.58rem', color: 'var(--muted)',
+              textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>{label}</div>
+            <div style={{ fontFamily: 'var(--font-data)', fontSize: '1rem', fontWeight: 700,
+              color: THRESHOLD_COLOURS['300'] }}>{value}</div>
           </div>
         ))}
       </div>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:'0.35rem 0.9rem', marginBottom:'0.75rem' }}>
-        {presentFuels.map(fg => (
-          <span key={fg} style={{ display:'flex', alignItems:'center', gap:'0.3rem',
-            fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--text)' }}>
-            <span style={{ display:'inline-block', width:10, height:10, borderRadius:2,
-              background:PS_FUEL_COLOURS[fg] ?? '#999' }} />
-            {fg}
+
+      {/* Legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem 0.9rem', marginBottom: '0.75rem' }}>
+        {thresholds.map(t => (
+          <span key={t} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem',
+            fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--text)' }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2,
+              background: THRESHOLD_COLOURS[t] }} />
+            {THRESHOLD_LABELS[t]}
           </span>
         ))}
-      </div>
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={rows} margin={{ top:4, right:16, bottom:0, left:0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="date" tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-            interval={Math.max(0, Math.floor(rows.length / 8) - 1)} />
-          <YAxis tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-            domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} width={32} />
-          <Tooltip
-            contentStyle={{ background:'var(--surface)', border:'1px solid var(--border)',
-              borderRadius:8, fontFamily:'var(--font-data)', fontSize:'0.72rem' }}
-            formatter={(v: any, name: string) => [`${v}%`, name]}
-            labelFormatter={(label: string) => {
-              const r = rows.find(r => r.date === label)
-              return `${label} · ${r?.total ?? 0} intervals`
-            }}
-          />
-          {presentFuels.map((fg, i) => (
-            <Bar key={fg} dataKey={fg} stackId="a" fill={PS_FUEL_COLOURS[fg] ?? '#999'}
-              radius={i === presentFuels.length - 1 ? [2,2,0,0] : [0,0,0,0]} />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-function GasDuidChart({ psData, region }: { psData: PSRegionData; region: string }) {
-  const duids = Object.entries(psData.byGasDuid)
-    .filter(([, vals]) => vals.some(x => x != null && x > 0))
-    .sort(([, a], [, b]) =>
-      b.reduce((s: number, v) => s + (v ?? 0), 0) - a.reduce((s: number, v) => s + (v ?? 0), 0)
-    )
-
-  const rows = useMemo(() => psData.dates.map((date, i) => {
-    const total = psData.totalIntervals[i] ?? 0
-    const row: Record<string, any> = { date: fmtPsDate(date), total }
-    for (const [duid, intervals] of duids) {
-      row[duid] = total > 0 ? Math.round((intervals[i] ?? 0) / total * 1000) / 10 : 0
-    }
-    return row
-  }), [psData, duids])
-
-  if (duids.length === 0) return (
-    <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
-      <p style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.75rem', margin:0 }}>
-        No gas price setter activity in {region} for this period.
-      </p>
-    </div>
-  )
-
-  return (
-    <div className="sq-card" style={{ padding:'1.25rem', marginBottom:'0.75rem' }}>
-      <div style={{ display:'flex', alignItems:'baseline', gap:'0.5rem', marginBottom:'0.75rem' }}>
-        <h3 style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--text)', margin:0 }}>
-          Gas Price Setters by Unit · {region}
-        </h3>
-        <span style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.62rem' }}>
-          % of dispatch intervals
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem',
+          fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)' }}>
+          <span style={{ display: 'inline-block', width: 10, height: 2,
+            borderTop: '2px dashed var(--muted)' }} />
+          Avg spot price ($/MWh, right axis)
         </span>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))',
-        gap:'0.4rem', marginBottom:'1rem' }}>
-        {duids.slice(0, 8).map(([duid, intervals], i) => {
-          const total    = intervals.reduce((s: number, v) => s + (v ?? 0), 0)
-          const recent   = intervals[intervals.length - 1] ?? null
-          const recentTot = psData.totalIntervals[psData.totalIntervals.length - 1] ?? 0
-          const pct = recent != null && recentTot > 0
-            ? Math.round(recent / recentTot * 1000) / 10 : null
-          return (
-            <div key={duid} style={{ padding:'0.4rem 0.6rem', background:'var(--bg)',
-              border:'1px solid var(--border)',
-              borderLeft:`3px solid ${PS_GAS_PALETTE[i % PS_GAS_PALETTE.length]}`, borderRadius:5 }}>
-              <div style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', fontWeight:700,
-                color:PS_GAS_PALETTE[i % PS_GAS_PALETTE.length] }}>{duid}</div>
-              <div style={{ fontFamily:'var(--font-data)', fontSize:'0.72rem', color:'var(--text)', marginTop:2 }}>
-                {total} intervals</div>
-              {pct != null && <div style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem',
-                color:'var(--muted)' }}>{pct}% last day</div>}
-            </div>
-          )
-        })}
-      </div>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:'0.35rem 0.9rem', marginBottom:'0.75rem' }}>
-        {duids.slice(0, 8).map(([duid], i) => (
-          <span key={duid} style={{ display:'flex', alignItems:'center', gap:'0.3rem',
-            fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--text)' }}>
-            <span style={{ display:'inline-block', width:10, height:10, borderRadius:2,
-              background:PS_GAS_PALETTE[i % PS_GAS_PALETTE.length] }} />
-            {duid}
-          </span>
-        ))}
-      </div>
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={rows} margin={{ top:4, right:16, bottom:0, left:0 }}>
+
+      <ResponsiveContainer width="100%" height={240}>
+        <ComposedChart data={rows} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="date" tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
+          <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 9, fontFamily: 'var(--font-data)' }}
             interval={Math.max(0, Math.floor(rows.length / 8) - 1)} />
-          <YAxis tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-            tickFormatter={(v: number) => `${v}%`} width={32} />
+          <YAxis yAxisId="pct" tick={{ fill: '#555', fontSize: 9, fontFamily: 'var(--font-data)' }}
+            tickFormatter={(v: number) => `${v}%`} width={32} domain={[0, 100]} />
+          <YAxis yAxisId="price" orientation="right"
+            tick={{ fill: '#555', fontSize: 9, fontFamily: 'var(--font-data)' }}
+            tickFormatter={(v: number) => `$${v}`} width={40} />
           <Tooltip
-            contentStyle={{ background:'var(--surface)', border:'1px solid var(--border)',
-              borderRadius:8, fontFamily:'var(--font-data)', fontSize:'0.72rem' }}
-            formatter={(v: any, name: string) => [`${v}%`, name]}
+            contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 8, fontFamily: 'var(--font-data)', fontSize: '0.72rem' }}
+            formatter={(v: any, name: string) =>
+              name === 'avg' ? [`$${Math.round(v)}/MWh`, 'Avg price'] : [`${v}%`, THRESHOLD_LABELS[name] ?? name]
+            }
           />
-          {duids.slice(0, 8).map(([duid], i) => (
-            <Bar key={duid} dataKey={duid} stackId="a" fill={PS_GAS_PALETTE[i % PS_GAS_PALETTE.length]}
-              radius={i === Math.min(duids.length, 8) - 1 ? [2,2,0,0] : [0,0,0,0]} />
+          {thresholds.map(t => (
+            <Bar key={t} yAxisId="pct" dataKey={t} fill={THRESHOLD_COLOURS[t]}
+              opacity={0.75} stackId="pct" />
           ))}
-        </BarChart>
+          <Line yAxisId="price" type="monotone" dataKey="avg" stroke="var(--muted)"
+            strokeWidth={2} strokeDasharray="4 3" dot={false} connectNulls />
+        </ComposedChart>
       </ResponsiveContainer>
+
+      <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)' }}>
+        Source: AEMO DispatchIS_Reports · DISPATCH,PRICE table · hourly sample ·
+        High prices (&gt;$300/MWh) typically indicate gas peakers or batteries are the marginal unit
+      </div>
     </div>
   )
 }
@@ -814,10 +757,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange, psData }: {
 
       {/* Price setter charts — below energy mix */}
       {psData && psData.dates.length > 0 && (
-        <>
-          <FuelShareChart psData={psData} region={region} />
-          <GasDuidChart  psData={psData} region={region} />
-        </>
+        <PriceSpikeChart psData={psData} region={region} />
       )}
 
       {/* Data table */}
