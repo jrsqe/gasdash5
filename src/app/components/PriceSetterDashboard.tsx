@@ -177,7 +177,7 @@ function GasDuidChart({ regionData, region }: { regionData: RegionData; region: 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
         gap: '0.4rem', marginBottom: '1rem' }}>
         {duids.slice(0, 8).map(([duid, { intervals, name }], i) => {
-          const total = intervals.reduce((s, v) => s + (v ?? 0), 0)
+          const total = intervals.reduce((s: number, v) => s + (v ?? 0), 0)
           const recent = intervals[intervals.length - 1] ?? null
           const recentTotal = regionData.totalIntervals[regionData.totalIntervals.length - 1] ?? 0
           const recentPct = recent != null && recentTotal > 0 ? Math.round(recent / recentTotal * 1000) / 10 : null
