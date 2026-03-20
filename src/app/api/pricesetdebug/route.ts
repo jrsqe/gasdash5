@@ -4,31 +4,42 @@ import JSZip from 'jszip'
 export async function GET() {
   const log: string[] = []
   try {
-    const dirUrl = 'https://www.nemweb.com.au/REPORTS/CURRENT/Next_Day_Dispatch/'
-    log.push('Fetching Next_Day_Dispatch directory...')
+    // Check DispatchIS_Reports — this is the 5-min dispatch report
+    const dirUrl = 'https://www.nemweb.com.au/REPORTS/CURRENT/DispatchIS_Reports/'
+    log.push(`Fetching ${dirUrl}`)
     const dirRes = await fetch(dirUrl, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
+    log.push(`Status: ${dirRes.status}`)
     const html = await dirRes.text()
+    log.push(`HTML length: ${html.length}`)
 
-    const re = /PUBLIC_NEXT_DAY_DISPATCH_(\d{8})_[\w]+\.zip/g
+    // Find zip files
+    const re = /PUBLIC_DISPATCHIS_\d+_\d+\.zip/g
     const files: string[] = []
     let m
     while ((m = re.exec(html)) !== null) files.push(m[0])
     log.push(`Found ${files.length} zip files`)
-    log.push(`Latest: ${files[files.length - 1] ?? 'none'}`)
+    if (files.length) {
+      log.push(`First: ${files[0]}`)
+      log.push(`Last:  ${files[files.length - 1]}`)
+    }
 
-    if (!files.length) return NextResponse.json({ ok: false, log })
+    if (!files.length) {
+      // Show raw HTML snippet to understand format
+      log.push('Raw HTML snippet:')
+      log.push(html.substring(0, 2000))
+      return NextResponse.json({ ok: false, log })
+    }
 
-    // Fetch most recent zip
+    // Fetch latest zip
     const zipUrl = dirUrl + files[files.length - 1]
     log.push(`Fetching: ${zipUrl}`)
-    const zipRes = await fetch(zipUrl, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
-    log.push(`Status: ${zipRes.status}, content-length: ${zipRes.headers.get('content-length')}`)
-
+    const zipRes = await fetch(zipUrl, { cache: 'no-store', signal: AbortSignal.timeout(10000) })
+    log.push(`Zip status: ${zipRes.status}, size: ${zipRes.headers.get('content-length')}`)
     const buf = await zipRes.arrayBuffer()
     log.push(`Buffer bytes: ${buf.byteLength}`)
 
     const zip = await JSZip.loadAsync(buf)
-    log.push(`Zip contents: ${Object.keys(zip.files).join(', ')}`)
+    log.push(`Zip files: ${Object.keys(zip.files).join(', ')}`)
 
     const csvFile = Object.values(zip.files).find(f => !f.dir && f.name.toUpperCase().endsWith('.CSV'))
     if (!csvFile) return NextResponse.json({ ok: false, log, error: 'No CSV' })
@@ -36,17 +47,17 @@ export async function GET() {
     const csv = await csvFile.async('string')
     log.push(`CSV bytes: ${csv.length}`)
 
-    // Find all table names (I rows)
     const lines = csv.split('\n')
-    const tableHeaders = lines.filter(l => l.startsWith('I,'))
-    log.push(`Table headers (${tableHeaders.length}):`)
-    tableHeaders.slice(0, 20).forEach(l => log.push(`  ${l.substring(0, 100)}`))
+    log.push(`Total lines: ${lines.length}`)
 
-    // Find PRICE_SETTER
+    // Show all I (header) rows to see what tables are present
+    lines.filter(l => l.startsWith('I,')).forEach(l => log.push(`HDR: ${l.substring(0, 120)}`))
+
+    // Check for PRICE_SETTER
     const psIdx = lines.findIndex(l => l.includes('PRICE_SETTER'))
     log.push(`PRICE_SETTER at line: ${psIdx}`)
     if (psIdx >= 0) {
-      lines.slice(psIdx, psIdx + 4).forEach((l, i) => log.push(`PS+${i}: ${l.substring(0, 200)}`))
+      lines.slice(psIdx, psIdx + 3).forEach((l, i) => log.push(`PS+${i}: ${l.substring(0, 200)}`))
     }
 
     return NextResponse.json({ ok: true, log })
