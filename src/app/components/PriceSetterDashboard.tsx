@@ -137,8 +137,8 @@ function GasDuidChart({ regionData, region }: { regionData: RegionData; region: 
   const duids = Object.entries(regionData.byGasDuid)
     .filter(([, v]) => v.intervals.some(x => x != null && x > 0))
     .sort(([, a], [, b]) => {
-      const sumA = a.intervals.reduce((s, v) => s + (v ?? 0), 0)
-      const sumB = b.intervals.reduce((s, v) => s + (v ?? 0), 0)
+      const sumA = a.intervals.reduce((s: number, v) => s + (v ?? 0), 0)
+      const sumB = b.intervals.reduce((s: number, v) => s + (v ?? 0), 0)
       return sumB - sumA
     })
 
