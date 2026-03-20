@@ -493,132 +493,9 @@ const PS_FUEL_COLOURS: Record<string, string> = {
 const PS_FUEL_ORDER = ['Gas', 'Coal', 'Wind', 'Solar', 'Hydro', 'Battery', 'Liquid fuel', 'Other']
 const PS_GAS_PALETTE = ['#FF9F0A','#FFCC02','#FF6B35','#FF453A','#E8602C','#FFD60A','#FF8C00','#FFA500']
 
-interface PSRegionData {
-  dates:    string[]
-  avgPrice: (number | null)[]
-  pctAbove: Record<string, (number | null)[]>  // key = threshold as string
-}
-
-function fmtPsDate(iso: string) {
-  const [, mm, dd] = iso.split('-'); return `${dd}/${mm}`
-}
-
-const THRESHOLD_COLOURS: Record<string, string> = {
-  '100':  '#FF9F0A',
-  '300':  '#FF6B35',
-  '1000': '#FF453A',
-}
-const THRESHOLD_LABELS: Record<string, string> = {
-  '100':  '> $100',
-  '300':  '> $300',
-  '1000': '> $1,000',
-}
-
-function PriceSpikeChart({ psData, region }: { psData: PSRegionData; region: string }) {
-  const thresholds = ['100', '300', '1000']
-  const rows = useMemo(() => psData.dates.map((date, i) => {
-    const row: Record<string, any> = {
-      date: fmtPsDate(date),
-      avg:  psData.avgPrice[i] ?? null,
-    }
-    for (const t of thresholds) row[t] = psData.pctAbove[t]?.[i] ?? null
-    return row
-  }), [psData])
-
-  const avgVals   = psData.avgPrice.filter((v): v is number => v != null)
-  const overallAvg = avgVals.length ? Math.round(avgVals.reduce((a, b) => a + b, 0) / avgVals.length) : null
-  const latestAvg  = psData.avgPrice[psData.avgPrice.length - 1]
-
-  const highPct    = psData.pctAbove['300']?.filter((v): v is number => v != null) ?? []
-  const avgHighPct = highPct.length ? Math.round(highPct.reduce((a: number, b) => a + b, 0) / highPct.length * 10) / 10 : null
-
-  return (
-    <div className="sq-card" style={{ padding: '1.25rem', marginBottom: '0.75rem' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-        marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-          <h3 style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)', margin: 0 }}>
-            Electricity Price Spikes · {region}
-          </h3>
-          <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-data)', fontSize: '0.62rem' }}>
-            % of 5-min intervals above threshold · last 7 days
-          </span>
-        </div>
-      </div>
-
-      {/* Stat cards */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-        {[
-          { label: 'Avg price (latest day)', value: latestAvg != null ? `$${Math.round(latestAvg)}/MWh` : '—' },
-          { label: 'Avg price (7 days)',     value: overallAvg != null ? `$${overallAvg}/MWh` : '—' },
-          { label: 'Intervals > $300 avg',   value: avgHighPct != null ? `${avgHighPct}%` : '—' },
-        ].map(({ label, value }) => (
-          <div key={label} style={{ padding: '0.35rem 0.7rem', background: 'var(--bg)',
-            border: '1px solid var(--border)',
-            borderLeft: `3px solid ${THRESHOLD_COLOURS['300']}`, borderRadius: 5 }}>
-            <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.58rem', color: 'var(--muted)',
-              textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>{label}</div>
-            <div style={{ fontFamily: 'var(--font-data)', fontSize: '1rem', fontWeight: 700,
-              color: THRESHOLD_COLOURS['300'] }}>{value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Legend */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem 0.9rem', marginBottom: '0.75rem' }}>
-        {thresholds.map(t => (
-          <span key={t} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem',
-            fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--text)' }}>
-            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2,
-              background: THRESHOLD_COLOURS[t] }} />
-            {THRESHOLD_LABELS[t]}
-          </span>
-        ))}
-        <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem',
-          fontFamily: 'var(--font-data)', fontSize: '0.65rem', color: 'var(--muted)' }}>
-          <span style={{ display: 'inline-block', width: 10, height: 2,
-            borderTop: '2px dashed var(--muted)' }} />
-          Avg spot price ($/MWh, right axis)
-        </span>
-      </div>
-
-      <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={rows} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 9, fontFamily: 'var(--font-data)' }}
-            interval={Math.max(0, Math.floor(rows.length / 8) - 1)} />
-          <YAxis yAxisId="pct" tick={{ fill: '#555', fontSize: 9, fontFamily: 'var(--font-data)' }}
-            tickFormatter={(v: number) => `${v}%`} width={32} domain={[0, 100]} />
-          <YAxis yAxisId="price" orientation="right"
-            tick={{ fill: '#555', fontSize: 9, fontFamily: 'var(--font-data)' }}
-            tickFormatter={(v: number) => `$${v}`} width={40} />
-          <Tooltip
-            contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 8, fontFamily: 'var(--font-data)', fontSize: '0.72rem' }}
-            formatter={(v: any, name: string) =>
-              name === 'avg' ? [`$${Math.round(v)}/MWh`, 'Avg price'] : [`${v}%`, THRESHOLD_LABELS[name] ?? name]
-            }
-          />
-          {thresholds.map(t => (
-            <Bar key={t} yAxisId="pct" dataKey={t} fill={THRESHOLD_COLOURS[t]}
-              opacity={0.75} stackId="pct" />
-          ))}
-          <Line yAxisId="price" type="monotone" dataKey="avg" stroke="var(--muted)"
-            strokeWidth={2} strokeDasharray="4 3" dot={false} connectNulls />
-        </ComposedChart>
-      </ResponsiveContainer>
-
-      <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: 'var(--muted)' }}>
-        Source: AEMO DispatchIS_Reports · DISPATCH,PRICE table · hourly sample ·
-        High prices (&gt;$300/MWh) typically indicate gas peakers or batteries are the marginal unit
-      </div>
-    </div>
-  )
-}
-
 // ── Region panel ───────────────────────────────────────────────────────────────
-function RegionPanel({ region, data, dateRange, onDateRangeChange, psData }: {
-  region: 'NSW'|'VIC'|'QLD'|'SA'; data: any; dateRange: DateRangeOption; onDateRangeChange: (v: DateRangeOption) => void; psData?: PSRegionData
+function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
+  region: 'NSW'|'VIC'|'QLD'|'SA'; data: any; dateRange: DateRangeOption; onDateRangeChange: (v: DateRangeOption) => void
 }) {
   const [showTable, setShowTable] = useState(false)
   const { facilities, rows } = data
@@ -755,10 +632,6 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange, psData }: {
         />
       )}
 
-      {/* Price setter charts — below energy mix */}
-      {psData && psData.dates.length > 0 && (
-        <PriceSpikeChart psData={psData} region={region} />
-      )}
 
       {/* Data table */}
       <div className="sq-card" style={{ overflow:'hidden', marginBottom:'1rem' }}>
@@ -801,7 +674,6 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
   const [activeTab,  setActiveTab]  = useState<'NSW'|'VIC'|'QLD'|'SA'>('NSW')
   const [interval,   setInterval]   = useState<IntervalOption>('1h')
   const [dateRange,  setDateRange]  = useState<DateRangeOption>('default')
-  const [psPayload,  setPsPayload]  = useState<Record<string, PSRegionData> | null>(null)
   const { payload, loading, error, fetchedAt, fetch: fetchData } = useElecData(interval)
 
   const INTERVAL_OPTIONS: {value: IntervalOption; label: string}[] = [
@@ -810,11 +682,7 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
 
   useEffect(() => {
     fetchData(interval)
-    // Fetch price setter data independently — doesn't depend on interval
-    fetch('/api/pricesetter')
-      .then(r => r.json())
-      .then(j => { if (j.ok) setPsPayload(j.data) })
-      .catch(() => {/* price setter is optional */})
+
   }, [])
 
   const handleInterval = (iv: IntervalOption) => {
@@ -905,8 +773,7 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
               key={`${activeTab}-${interval}`}
               region={activeTab as 'NSW'|'VIC'|'QLD'|'SA'} data={activeData}
               dateRange={dateRange} onDateRangeChange={setDateRange}
-              psData={psPayload?.[activeTab]}
-            />
+/>
           </div>
         ) : null}
       </div>
