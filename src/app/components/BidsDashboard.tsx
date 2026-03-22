@@ -184,7 +184,7 @@ function StationBidChart({ station, rows, fuel }: {
   const FUEL_COL = { gas: '#FF9F0A', coal: '#636366' }
   const accentCol = FUEL_COL[fuel]
 
-  const chartRows = useMemo(() => {
+  const chartRows = useMemo((): Record<string, any>[] => {
     if (!rows.length) return []
     return rows
       .filter((_, i) => i % 6 === 0)   // sample every 30 min (6 × 5min)
@@ -194,7 +194,7 @@ function StationBidChart({ station, rows, fuel }: {
           time: fmtDateTime(String(r.DateTime ?? '')),
           ...bands,
           total: BANDS.reduce((s, b) => s + (bands[b.key] ?? 0), 0),
-        }
+        } as Record<string, any>
       })
   }, [rows, station])
 
@@ -234,7 +234,7 @@ function StationBidChart({ station, rows, fuel }: {
 
 // ── Price Setter Plant Bandcost ───────────────────────────────────────────────
 function PriceSetterBandChart({ rows, region }: { rows: any[]; region: Region }) {
-  const chartRows = useMemo(() => {
+  const chartRows = useMemo((): Record<string, any>[] => {
     if (!rows.length) return []
     return rows.filter((_, i) => i % 6 === 0).map(r => {
       const out: Record<string, any> = { time: fmtDateTime(String(r.DateTime ?? '')) }
