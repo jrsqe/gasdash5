@@ -1,55 +1,72 @@
 import { NextResponse } from 'next/server'
 
-const NEO_BASE = 'https://www.neopoint.com.au/Service/Json'
-const NEO_KEY  = process.env.NEO_KEY ?? 'squshe10'
+const NEO_KEY = process.env.NEO_KEY ?? 'squshe10'
 
-async function probe(name: string, params: Record<string, string>) {
-  const qs = new URLSearchParams({ ...params, key: NEO_KEY }).toString()
+async function probe(name: string, url: string) {
   try {
-    const res  = await fetch(`${NEO_BASE}?${qs}`, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
-    const json = await res.json()
-    const rows = Array.isArray(json) ? json : []
-    return { name, rows: rows.length, keys: rows[0] ? Object.keys(rows[0]).slice(0, 6) : [], sample: rows.slice(0, 1) }
+    const res  = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10000) })
+    const text = await res.text()
+    if (!res.ok) return { name, status: res.status, error: text.slice(0, 200) }
+
+    // Try JSON parse first
+    try {
+      const json = JSON.parse(text)
+      const rows = Array.isArray(json) ? json : []
+      return { name, format: 'json', status: res.status, rows: rows.length,
+        keys: rows[0] ? Object.keys(rows[0]) : [], sample: rows.slice(0, 2) }
+    } catch {
+      // CSV — count lines, show first 3
+      const lines = text.trim().split('\n').filter(Boolean)
+      return { name, format: 'csv', status: res.status, lines: lines.length,
+        preview: lines.slice(0, 4) }
+    }
   } catch (e: any) {
-    return { name, rows: 0, error: e.message }
+    return { name, error: e.message }
   }
 }
 
-function daysAgo(n: number): string {
-  const d = new Date()
-  d.setUTCDate(d.getUTCDate() - n)
-  return d.toISOString().slice(0, 10) + ' 00:00'
-}
+const BASE_JSON = 'https://www.neopoint.com.au/Service/Json'
+const BASE_CSV  = 'https://www.neopoint.com.au/Service/Csv'
+const KEY = `key=${NEO_KEY}`
+
+// The working CSV URL uses from=2025-03-23, period=Three Days
+// Test JSON with same params, and also test various historical dates
+const PS = '108%20Price%20Setter%5CEnergy%20Pricesetting%20by%20Station'
 
 export async function GET() {
-  const from = daysAgo(1)
+  const tests = await Promise.all([
+    // Replicate the exact working CSV URL but as JSON
+    probe('PS by Station NSW1 - exact working params (JSON)',
+      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=-1&${KEY}`),
 
-  // Exhaustive search of 108 Price Setter report names using Daily period
-  // Names come from the NEOpoint All Reports page (section 10 of user guide)
-  const psNames = [
-    'Pricesetter fueltype 30min',
-    'Pricesetter fueltype 5min',
-    'Pricesetter fueltype and region demand 30min',
-    'Pricesetter fueltype and system demand 30min',
-    'Pricesetter station 30min',
-    'Pricesetter station 5min',
-    'Pricesetter All Data Table',
-    'Pricesetter Data Table - no FCAS',
-    'Pricesetter unit and fuel by region',
-    'Energy Pricesetting by Station',
-    'Energy Pricesetter Plant Bandcost',
-    'Pricesetter fueltype and region demand 5min',
-    'Region Pricesetter fueltype',
-    'Region Pricesetter station',
-    'Dispatch Pricesetter fueltype',
-  ]
+    // Same but CSV to confirm it still works
+    probe('PS by Station NSW1 - exact working params (CSV)',
+      `${BASE_CSV}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=-1&${KEY}`),
 
-  const tests = await Promise.all(
-    psNames.map(n => probe(`108 PS: ${n}`, {
-      f: `108 Price Setter\\${n}`,
-      from, period: 'Daily', instances: 'NSW1', section: '-1',
-    }))
-  )
+    // Try other regions with same date
+    probe('PS by Station VIC1 - Three Days from 2025-03-23',
+      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=VIC1&section=-1&${KEY}`),
+    probe('PS by Station QLD1 - Three Days from 2025-03-23',
+      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=QLD1&section=-1&${KEY}`),
+    probe('PS by Station SA1 - Three Days from 2025-03-23',
+      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=SA1&section=-1&${KEY}`),
 
-  return NextResponse.json({ ok: true, from, working: tests.filter(t => t.rows > 0), all: tests })
+    // Try Weekly period from a year ago
+    probe('PS by Station NSW1 - Weekly from 2025-03-17',
+      `${BASE_JSON}?f=${PS}&from=2025-03-17%2000%3A00&period=Weekly&instances=NSW1&section=-1&${KEY}`),
+
+    // Try with different section numbers
+    probe('PS by Station NSW1 - Three Days section=0',
+      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=0&${KEY}`),
+    probe('PS by Station NSW1 - Three Days section=1',
+      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=1&${KEY}`),
+
+    // Try other PS report names with historical date
+    probe('PS Plant Bandcost NSW1 - Three Days from 2025-03-23',
+      `${BASE_JSON}?f=108%20Price%20Setter%5CEnergy%20Pricesetter%20Plant%20Bandcost&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=-1&${KEY}`),
+    probe('PS fueltype 30min NSW1 - Three Days from 2025-03-23',
+      `${BASE_JSON}?f=108%20Price%20Setter%5CPricesetter%20fueltype%2030min&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=-1&${KEY}`),
+  ])
+
+  return NextResponse.json({ ok: true, tests })
 }
