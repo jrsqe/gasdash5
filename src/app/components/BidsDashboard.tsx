@@ -19,23 +19,41 @@ function getFrom(): string {
 // Fuel classification based on exact station names from the data
 function stationFuel(name: string): 'gas' | 'coal' | 'renewable' | 'battery' | 'other' {
   const n = name.toLowerCase()
+
+  // Battery first — catches "Torrens Island BESS", "Hazelwood Battery...", etc.
+  // Must run before gas/coal checks since some battery names contain gas station names
+  if (n.includes('bess') || n.includes('battery') || n.includes('big battery') ||
+      n.includes('power reserve') || n.includes('hornsdale') ||
+      n.includes('rangebank') || n.includes('koorangie') || n.includes('tarong bess') ||
+      n.includes('wandoan bess')) return 'battery'
+
+  // Coal — exact station names from AEMO registration
   if (['bayswater','eraring','mt piper','vales pt','loy yang a','loy yang b','yallourn',
-       'callide b','callide c','millmerran','kogan creek','stanwell','tarong','tarong north',
-       'gladstone'].some(s => n === s)) return 'coal'
+       'callide b','callide c','millmerran','kogan creek','stanwell','tarong north',
+       'tarong','gladstone'].some(s => n === s)) return 'coal'
+
+  // Gas — exact station names from AEMO registration
   if (['colongra','tallawarra','uranquinty','hunter power station','smithfield energy facility',
        'mortlake','jeeralang a','jeeralang b','laverton north','somerton','newport',
        'bairnsdale','valley power peaking facility','darling downs','condamine a',
        'braemar power','braemar 2 power','oakey','swanbank e','townsville gas turbine',
        'yarwun','roma','torrens island b','torrens island a','osborne','pelican point',
        'quarantine','ladbroke grove','dry creek gas turbine','mintaro gas turbine',
-       'hallett','barker inlet'].some(s => n === s || n.includes(s))) return 'gas'
-  if (n.includes('battery') || n.includes('bess') || n.includes('big battery') ||
-      n.includes('power reserve') || n.includes('rangebank') || n.includes('hornsdale')) return 'battery'
-  if (n.includes('wind') || n.includes('solar') || n.includes('hydro') ||
+       'hallett','barker inlet'].some(s => n === s)) return 'gas'
+
+  // Renewable — hydro, wind, solar
+  if (n.includes('wind') || n.includes('solar') || n.includes('farm') ||
       n.includes('murray') || n.includes('tumut') || n.includes('gordon') ||
       n.includes('wivenhoe') || n.includes('poatina') || n.includes('reece') ||
       n.includes('tribute') || n.includes('fisher') || n.includes('cethana') ||
-      n.includes('john butters') || n.includes('tungatinah') || n.includes('liapootah')) return 'renewable'
+      n.includes('john butters') || n.includes('tungatinah') || n.includes('liapootah') ||
+      n.includes('hydro') || n.includes('dartmouth') || n.includes('eildon') ||
+      n.includes('kiewa') || n.includes('blowering') || n.includes('guthega') ||
+      n.includes('hume') || n.includes('kareeya') || n.includes('barron') ||
+      n.includes('mackintosh') || n.includes('meadowbank') || n.includes('bastyan') ||
+      n.includes('gordon') || n.includes('tarralea') || n.includes('trevallyn') ||
+      n.includes('pump')) return 'renewable'
+
   return 'other'
 }
 
