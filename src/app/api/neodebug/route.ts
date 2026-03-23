@@ -1,72 +1,67 @@
 import { NextResponse } from 'next/server'
 
 const NEO_KEY = process.env.NEO_KEY ?? 'squshe10'
+const BASE    = 'https://www.neopoint.com.au/Service/Json'
 
-async function probe(name: string, url: string) {
+async function probe(name: string, params: Record<string, string>) {
+  const qs = new URLSearchParams({ ...params, key: NEO_KEY })
   try {
-    const res  = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10000) })
-    const text = await res.text()
-    if (!res.ok) return { name, status: res.status, error: text.slice(0, 200) }
-
-    // Try JSON parse first
-    try {
-      const json = JSON.parse(text)
-      const rows = Array.isArray(json) ? json : []
-      return { name, format: 'json', status: res.status, rows: rows.length,
-        keys: rows[0] ? Object.keys(rows[0]) : [], sample: rows.slice(0, 2) }
-    } catch {
-      // CSV — count lines, show first 3
-      const lines = text.trim().split('\n').filter(Boolean)
-      return { name, format: 'csv', status: res.status, lines: lines.length,
-        preview: lines.slice(0, 4) }
-    }
+    const res  = await fetch(`${BASE}?${qs}`, { cache: 'no-store', signal: AbortSignal.timeout(10000) })
+    const json = await res.json()
+    const rows = Array.isArray(json) ? json : []
+    return { name, rows: rows.length, keys: rows[0] ? Object.keys(rows[0]) : [], sample: rows.slice(0, 3) }
   } catch (e: any) {
-    return { name, error: e.message }
+    return { name, rows: 0, error: e.message }
   }
 }
 
-const BASE_JSON = 'https://www.neopoint.com.au/Service/Json'
-const BASE_CSV  = 'https://www.neopoint.com.au/Service/Csv'
-const KEY = `key=${NEO_KEY}`
-
-// The working CSV URL uses from=2025-03-23, period=Three Days
-// Test JSON with same params, and also test various historical dates
-const PS = '108%20Price%20Setter%5CEnergy%20Pricesetting%20by%20Station'
-
 export async function GET() {
-  const tests = await Promise.all([
-    // Replicate the exact working CSV URL but as JSON
-    probe('PS by Station NSW1 - exact working params (JSON)',
-      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=-1&${KEY}`),
+  // Test sequentially to avoid concurrent request limit
+  const results = []
 
-    // Same but CSV to confirm it still works
-    probe('PS by Station NSW1 - exact working params (CSV)',
-      `${BASE_CSV}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=-1&${KEY}`),
+  // The exact URL from user - Merit Order Stack
+  results.push(await probe('Merit Order Stack NSW1 Gas Daily', {
+    f: '104 Bids - Energy\\Merit Order Stack by Region & Fuel',
+    from: '2025-03-23 00:00', period: 'Daily', instances: 'GEN;NSW1;Gas', section: '-1',
+  }))
 
-    // Try other regions with same date
-    probe('PS by Station VIC1 - Three Days from 2025-03-23',
-      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=VIC1&section=-1&${KEY}`),
-    probe('PS by Station QLD1 - Three Days from 2025-03-23',
-      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=QLD1&section=-1&${KEY}`),
-    probe('PS by Station SA1 - Three Days from 2025-03-23',
-      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=SA1&section=-1&${KEY}`),
+  // Try other regions
+  results.push(await probe('Merit Order Stack VIC1 Gas Daily', {
+    f: '104 Bids - Energy\\Merit Order Stack by Region & Fuel',
+    from: '2025-03-23 00:00', period: 'Daily', instances: 'GEN;VIC1;Gas', section: '-1',
+  }))
 
-    // Try Weekly period from a year ago
-    probe('PS by Station NSW1 - Weekly from 2025-03-17',
-      `${BASE_JSON}?f=${PS}&from=2025-03-17%2000%3A00&period=Weekly&instances=NSW1&section=-1&${KEY}`),
+  results.push(await probe('Merit Order Stack QLD1 Gas Daily', {
+    f: '104 Bids - Energy\\Merit Order Stack by Region & Fuel',
+    from: '2025-03-23 00:00', period: 'Daily', instances: 'GEN;QLD1;Gas', section: '-1',
+  }))
 
-    // Try with different section numbers
-    probe('PS by Station NSW1 - Three Days section=0',
-      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=0&${KEY}`),
-    probe('PS by Station NSW1 - Three Days section=1',
-      `${BASE_JSON}?f=${PS}&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=1&${KEY}`),
+  results.push(await probe('Merit Order Stack SA1 Gas Daily', {
+    f: '104 Bids - Energy\\Merit Order Stack by Region & Fuel',
+    from: '2025-03-23 00:00', period: 'Daily', instances: 'GEN;SA1;Gas', section: '-1',
+  }))
 
-    // Try other PS report names with historical date
-    probe('PS Plant Bandcost NSW1 - Three Days from 2025-03-23',
-      `${BASE_JSON}?f=108%20Price%20Setter%5CEnergy%20Pricesetter%20Plant%20Bandcost&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=-1&${KEY}`),
-    probe('PS fueltype 30min NSW1 - Three Days from 2025-03-23',
-      `${BASE_JSON}?f=108%20Price%20Setter%5CPricesetter%20fueltype%2030min&from=2025-03-23%2000%3A00&period=Three%20Days&instances=NSW1&section=-1&${KEY}`),
-  ])
+  // Try different sections
+  results.push(await probe('Merit Order Stack NSW1 Gas section=0', {
+    f: '104 Bids - Energy\\Merit Order Stack by Region & Fuel',
+    from: '2025-03-23 00:00', period: 'Daily', instances: 'GEN;NSW1;Gas', section: '0',
+  }))
+  results.push(await probe('Merit Order Stack NSW1 Gas section=1', {
+    f: '104 Bids - Energy\\Merit Order Stack by Region & Fuel',
+    from: '2025-03-23 00:00', period: 'Daily', instances: 'GEN;NSW1;Gas', section: '1',
+  }))
+  results.push(await probe('Merit Order Stack NSW1 Gas section=2', {
+    f: '104 Bids - Energy\\Merit Order Stack by Region & Fuel',
+    from: '2025-03-23 00:00', period: 'Daily', instances: 'GEN;NSW1;Gas', section: '2',
+  }))
 
-  return NextResponse.json({ ok: true, tests })
+  // Try recent date too
+  const yesterday = new Date(); yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+  const yStr = yesterday.toISOString().slice(0, 10) + ' 00:00'
+  results.push(await probe('Merit Order Stack NSW1 Gas yesterday', {
+    f: '104 Bids - Energy\\Merit Order Stack by Region & Fuel',
+    from: yStr, period: 'Daily', instances: 'GEN;NSW1;Gas', section: '-1',
+  }))
+
+  return NextResponse.json({ ok: true, results })
 }
