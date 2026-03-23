@@ -165,6 +165,9 @@ export default function MainDashboard() {
           <GbbDashboard />
         </div>
       </div>
+      <div style={{ display: tab === 'bids' ? 'block' : 'none' }}>
+        <BidsDashboard />
+      </div>
 
       <footer style={{
         borderTop: '1px solid var(--border)',
