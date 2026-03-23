@@ -9,17 +9,12 @@ async function probe(name: string, params: Record<string, string>) {
     const res  = await fetch(`${NEO_BASE}?${qs}`, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
     const json = await res.json()
     const rows = Array.isArray(json) ? json : []
-    return { name, rows: rows.length, keys: rows[0] ? Object.keys(rows[0]) : [], sample: rows.slice(0, 2) }
+    return { name, rows: rows.length, keys: rows[0] ? Object.keys(rows[0]).slice(0, 6) : [], sample: rows.slice(0, 1) }
   } catch (e: any) {
     return { name, rows: 0, error: e.message }
   }
 }
 
-function weeksAgo(n: number): string {
-  const d = new Date()
-  d.setUTCDate(d.getUTCDate() - n * 7)
-  return d.toISOString().slice(0, 10) + ' 00:00'
-}
 function daysAgo(n: number): string {
   const d = new Date()
   d.setUTCDate(d.getUTCDate() - n)
@@ -27,48 +22,34 @@ function daysAgo(n: number): string {
 }
 
 export async function GET() {
-  const tests = await Promise.all([
-    // Price setter - using from = past date so period covers completed data
-    probe('PS by Station SA1 Weekly (from 2w ago)', {
-      f: '108 Price Setter\\Energy Pricesetting by Station',
-      from: weeksAgo(2), period: 'Weekly', instances: 'SA1', section: '-1' }),
-    probe('PS by Station NSW1 Weekly (from 2w ago)', {
-      f: '108 Price Setter\\Energy Pricesetting by Station',
-      from: weeksAgo(2), period: 'Weekly', instances: 'NSW1', section: '-1' }),
-    probe('PS by Station VIC1 Weekly (from 2w ago)', {
-      f: '108 Price Setter\\Energy Pricesetting by Station',
-      from: weeksAgo(2), period: 'Weekly', instances: 'VIC1', section: '-1' }),
-    probe('PS by Station QLD1 Weekly (from 2w ago)', {
-      f: '108 Price Setter\\Energy Pricesetting by Station',
-      from: weeksAgo(2), period: 'Weekly', instances: 'QLD1', section: '-1' }),
+  const from = daysAgo(1)
 
-    // Try the other price setter report too
-    probe('PS Plant Bandcost SA1 Weekly (from 2w ago)', {
-      f: '108 Price Setter\\Energy Pricesetter Plant Bandcost',
-      from: weeksAgo(2), period: 'Weekly', instances: 'SA1', section: '-1' }),
-    probe('PS Plant Bandcost NSW1 Weekly (from 2w ago)', {
-      f: '108 Price Setter\\Energy Pricesetter Plant Bandcost',
-      from: weeksAgo(2), period: 'Weekly', instances: 'NSW1', section: '-1' }),
+  // Exhaustive search of 108 Price Setter report names using Daily period
+  // Names come from the NEOpoint All Reports page (section 10 of user guide)
+  const psNames = [
+    'Pricesetter fueltype 30min',
+    'Pricesetter fueltype 5min',
+    'Pricesetter fueltype and region demand 30min',
+    'Pricesetter fueltype and system demand 30min',
+    'Pricesetter station 30min',
+    'Pricesetter station 5min',
+    'Pricesetter All Data Table',
+    'Pricesetter Data Table - no FCAS',
+    'Pricesetter unit and fuel by region',
+    'Energy Pricesetting by Station',
+    'Energy Pricesetter Plant Bandcost',
+    'Pricesetter fueltype and region demand 5min',
+    'Region Pricesetter fueltype',
+    'Region Pricesetter station',
+    'Dispatch Pricesetter fueltype',
+  ]
 
-    // Also try Daily from further back
-    probe('PS by Station NSW1 Daily (from 8d ago)', {
-      f: '108 Price Setter\\Energy Pricesetting by Station',
-      from: daysAgo(8), period: 'Daily', instances: 'NSW1', section: '-1' }),
-    probe('PS fueltype NSW1 Weekly (from 2w ago)', {
-      f: '108 Price Setter\\Pricesetter fueltype 30min',
-      from: weeksAgo(2), period: 'Weekly', instances: 'NSW1', section: '-1' }),
-    probe('PS station 30min NSW1 Weekly (from 2w ago)', {
-      f: '108 Price Setter\\Pricesetter station 30min',
-      from: weeksAgo(2), period: 'Weekly', instances: 'NSW1', section: '-1' }),
+  const tests = await Promise.all(
+    psNames.map(n => probe(`108 PS: ${n}`, {
+      f: `108 Price Setter\\${n}`,
+      from, period: 'Daily', instances: 'NSW1', section: '-1',
+    }))
+  )
 
-    // Region bids with Weekly period from 2w ago
-    probe('Region bids NSW1 Weekly (from 2w ago)', {
-      f: '104 Bids - Energy\\Region Bids at Actual Prices 5min',
-      from: weeksAgo(2), period: 'Weekly', instances: 'GEN;NSW1', section: '-1' }),
-    probe('Station bids Gladstone Weekly (from 2w ago)', {
-      f: '104 Bids - Energy\\Station Bids at Actual Prices 5min',
-      from: weeksAgo(2), period: 'Weekly', instances: 'GEN;Gladstone', section: '-1' }),
-  ])
-
-  return NextResponse.json({ ok: true, tests })
+  return NextResponse.json({ ok: true, from, working: tests.filter(t => t.rows > 0), all: tests })
 }
