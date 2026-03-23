@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import {
-  ComposedChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
+  ComposedChart, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
   Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 
