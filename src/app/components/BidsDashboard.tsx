@@ -1,7 +1,8 @@
 'use client'
+import React from 'react'
 import { useState, useEffect, useMemo } from 'react'
 import {
-  ComposedChart, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 
@@ -233,7 +234,11 @@ function parsePsRows(rows: any[], region: NemRegion): PsRow[] {
   return rows
     .map(r => ({
       station: String(r.DateTime ?? ''),
-      pct: Math.round(Number(r[pctKey] ?? 0) * 1000) / 10,
+      pct: (() => {
+        const v = Number(r[pctKey] ?? 0)
+        // If value > 1 it's already a percentage, otherwise it's a fraction
+        return Math.round((v > 1 ? v : v * 100) * 10) / 10
+      })(),
       fuel: stationFuel(String(r.DateTime ?? '')),
     }))
     .filter(r => r.station && r.pct > 0)
@@ -315,6 +320,27 @@ function buildMeritOrder(row: any): MeritSegment[] {
     return seg
   })
 }
+
+// Build merit order chart data — pick one interval per hour (or specific time)
+// Returns: array of { time, segments } for a time selector
+function buildMeritSnapshots(rows: any[]): Array<{ time: string; dateTime: string; segments: MeritSegment[] }> {
+  if (!rows.length) return []
+  // Sample every 12 rows = 1 hour
+  return rows
+    .filter((_, i) => i % 12 === 0)
+    .map(row => {
+      const dt = String(row.DateTime || '')
+      return {
+        time:     fmtDT(dt),
+        dateTime: dt,
+        segments: buildMeritOrder(row),
+      }
+    })
+    .filter(s => s.segments.length > 0)
+}
+
+// For the recharts bar chart: convert segments to a single row with station keys
+// Each station gets a key like "Colongra|0" (station|segmentIndex to handle multiple bids)
 
 // Build merit order chart data — pick one interval per hour (or specific time)
 // Returns: array of { time, segments } for a time selector
@@ -434,6 +460,162 @@ function buildStationAvgs(rows: any[], mode: FuelMode) {
   return Object.entries(sums)
     .map(([name, { fuel, total }]) => ({ name, fuel, avgMw: Math.round(total / rows.length) }))
     .filter(s => s.avgMw > 0).sort((a, b) => b.avgMw - a.avgMw).slice(0, 20)
+}
+
+
+// ── MeritOrderSvg — pure SVG bid stack ────────────────────────────────────────
+// X axis = cumulative MW (merit order left to right)
+// Y axis = bid price $/MWh
+// Each rectangle = one DUID bid, width=MW, height spans from 0 to bid price
+function MeritOrderSvg({ segments, spotPrice }: {
+  segments: MeritSegment[]
+  spotPrice: number | null
+}) {
+  const [hovered, setHovered] = React.useState<number | null>(null)
+  const [tooltipPos, setTooltipPos] = React.useState({ x: 0, y: 0 })
+
+  if (!segments.length) return null
+
+  const PAD   = { top: 12, right: 16, bottom: 36, left: 52 }
+  const W     = 900
+  const H     = 320
+  const plotW = W - PAD.left - PAD.right
+  const plotH = H - PAD.top  - PAD.bottom
+
+  const totalMw  = segments[segments.length - 1]?.cumMwTo || 1
+  const prices   = segments.map(s => s.price).filter(p => isFinite(p))
+  const maxPrice = Math.max(...prices, spotPrice ?? 0, 50) * 1.1
+  const minPrice = Math.min(...prices, 0)
+  const priceRange = maxPrice - minPrice || 1
+
+  const xScale = (mw: number) => (mw / totalMw) * plotW
+  const yScale = (p: number)  => plotH - ((p - minPrice) / priceRange) * plotH
+
+  // Y axis ticks
+  const yTicks: number[] = []
+  const step = Math.pow(10, Math.floor(Math.log10(maxPrice))) / 2
+  for (let v = 0; v <= maxPrice; v += step) yTicks.push(Math.round(v))
+
+  // X axis ticks (~6)
+  const xTicks: number[] = []
+  const xStep = Math.ceil(totalMw / 6 / 100) * 100
+  for (let v = 0; v <= totalMw; v += xStep) xTicks.push(v)
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        {/* Grid lines */}
+        {yTicks.map(t => (
+          <line key={t}
+            x1={PAD.left} x2={PAD.left + plotW}
+            y1={PAD.top + yScale(t)} y2={PAD.top + yScale(t)}
+            stroke="var(--border)" strokeDasharray="3 3" />
+        ))}
+
+        {/* Bid rectangles */}
+        {segments.map((seg, i) => {
+          if (!isFinite(seg.price) || !isFinite(seg.mw) || seg.mw <= 0) return null
+          const x  = PAD.left + xScale(seg.cumMwFrom)
+          const x2 = PAD.left + xScale(seg.cumMwTo)
+          const y  = PAD.top  + yScale(seg.price)
+          const h  = plotH - yScale(seg.price) + yScale(minPrice)
+          const bw = Math.max(1, x2 - x - 0.5)
+          return (
+            <rect key={i}
+              x={x} y={y} width={bw} height={Math.max(1, h)}
+              fill={stationColour(seg.station)}
+              opacity={hovered === null || hovered === i ? 1 : 0.4}
+              rx={1}
+              onMouseEnter={e => { setHovered(i); setTooltipPos({ x: e.clientX, y: e.clientY }) }}
+              onMouseLeave={() => setHovered(null)}
+              style={{ cursor: 'pointer' }}
+            />
+          )
+        })}
+
+        {/* Spot price reference line */}
+        {spotPrice != null && isFinite(spotPrice) && (() => {
+          const sy = PAD.top + yScale(spotPrice)
+          return (
+            <>
+              <line x1={PAD.left} x2={PAD.left + plotW}
+                y1={sy} y2={sy}
+                stroke="rgba(255,255,255,0.7)" strokeDasharray="5 3" strokeWidth={1.5} />
+              <text x={PAD.left + plotW + 2} y={sy + 4}
+                fontSize={8} fill="var(--muted)"
+                fontFamily="var(--font-data)">
+                ${Math.round(spotPrice)}
+              </text>
+            </>
+          )
+        })()}
+
+        {/* Y axis */}
+        <line x1={PAD.left} x2={PAD.left} y1={PAD.top} y2={PAD.top + plotH}
+          stroke="var(--border)" />
+        {yTicks.map(t => (
+          <g key={t}>
+            <line x1={PAD.left - 4} x2={PAD.left}
+              y1={PAD.top + yScale(t)} y2={PAD.top + yScale(t)}
+              stroke="var(--border)" />
+            <text x={PAD.left - 6} y={PAD.top + yScale(t) + 4}
+              textAnchor="end" fontSize={9} fill="#555"
+              fontFamily="var(--font-data)">
+              ${t >= 1000 ? `${(t/1000).toFixed(0)}k` : t}
+            </text>
+          </g>
+        ))}
+        <text x={10} y={PAD.top + plotH / 2}
+          textAnchor="middle" fontSize={9} fill="var(--muted)"
+          fontFamily="var(--font-data)"
+          transform={`rotate(-90, 10, ${PAD.top + plotH / 2})`}>
+          $/MWh
+        </text>
+
+        {/* X axis */}
+        <line x1={PAD.left} x2={PAD.left + plotW}
+          y1={PAD.top + plotH} y2={PAD.top + plotH}
+          stroke="var(--border)" />
+        {xTicks.map(t => (
+          <g key={t}>
+            <line x1={PAD.left + xScale(t)} x2={PAD.left + xScale(t)}
+              y1={PAD.top + plotH} y2={PAD.top + plotH + 4}
+              stroke="var(--border)" />
+            <text x={PAD.left + xScale(t)} y={PAD.top + plotH + 14}
+              textAnchor="middle" fontSize={9} fill="#555"
+              fontFamily="var(--font-data)">
+              {t} MW
+            </text>
+          </g>
+        ))}
+        <text x={PAD.left + plotW / 2} y={H - 2}
+          textAnchor="middle" fontSize={9} fill="var(--muted)"
+          fontFamily="var(--font-data)">
+          Cumulative MW →
+        </text>
+      </svg>
+
+      {/* Tooltip */}
+      {hovered !== null && segments[hovered] && (
+        <div style={{
+          position: 'fixed',
+          left: tooltipPos.x + 12, top: tooltipPos.y - 40,
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          borderRadius: 8, padding: '0.4rem 0.6rem',
+          fontFamily: 'var(--font-data)', fontSize: '0.72rem',
+          color: 'var(--text)', pointerEvents: 'none', zIndex: 9999,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        }}>
+          <div style={{ fontWeight: 700, color: stationColour(segments[hovered].station) }}>
+            {segments[hovered].station}
+          </div>
+          <div>{segments[hovered].duid}</div>
+          <div>${segments[hovered].price.toFixed(2)}/MWh</div>
+          <div>{segments[hovered].mw} MW</div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -560,7 +742,6 @@ export default function BidsDashboard() {
   const stationAvgs    = useMemo(() => buildStationAvgs(rows, mode),    [rows, mode])
   const meritSnapshots = useMemo(() => buildMeritSnapshots(rows),       [rows])
 
-  const hasSpot = stackRows.some(r => r.spot != null && isFinite(r.spot))
 
   return (
     <div style={{ maxWidth:1400, margin:'0 auto', padding:'1.5rem' }}>
@@ -646,7 +827,7 @@ export default function BidsDashboard() {
       {/* ── Gas merit order bid stack ── */}
       {meritSnapshots.length > 0 && (() => {
         const snap = meritSnapshots[selectedSnap] ?? meritSnapshots[0]
-        const { row, keys, stationKeys } = segmentsToChartRow(snap.segments)
+
         const totalMw = snap.segments.reduce((s, seg) => s + seg.mw, 0)
         const spotRow = stackRows.find(r => r.time === snap.time)
         const spotPrice = spotRow?.spot
@@ -707,63 +888,8 @@ export default function BidsDashboard() {
               )}
             </div>
 
-            {/* Merit order chart: X = cumulative MW, Y = price */}
-            <ResponsiveContainer width="100%" height={320}>
-              <ComposedChart
-                data={[row]}
-                layout="horizontal"
-                margin={{ top: 8, right: 16, bottom: 24, left: 0 }}
-                barCategoryGap={0}
-                barGap={0}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={true} vertical={false} />
-                <XAxis
-                  type="number"
-                  domain={[0, totalMw]}
-                  tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-                  tickFormatter={(v: number) => `${v} MW`}
-                  label={{ value:'Cumulative MW →', position:'insideBottom', offset:-12,
-                    style:{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' } }}
-                />
-                <YAxis
-                  tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-                  tickFormatter={(v: number) => `$${Math.round(v)}`}
-                  width={46}
-                  label={{ value:'$/MWh', angle:-90, position:'insideLeft',
-                    style:{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' } }}
-                />
-                <Tooltip
-                  contentStyle={{ background:'var(--surface)', border:'1px solid var(--border)',
-                    borderRadius:8, fontFamily:'var(--font-data)', fontSize:'0.65rem' }}
-                  formatter={(_: any, k: string) => {
-                    const seg = snap.segments[parseInt(k.slice(1))]
-                    if (!seg) return ['-', k]
-                    return [`${seg.mw} MW @ $${seg.price.toFixed(2)}/MWh`, seg.station]
-                  }}
-                />
-                {spotPrice != null && (
-                  <ReferenceLine
-                    y={spotPrice}
-                    stroke="rgba(255,255,255,0.6)"
-                    strokeDasharray="4 3"
-                    label={{ value:`Spot $${spotPrice.toFixed(0)}`, position:'right',
-                      style:{ fill:'var(--muted)', fontSize:8, fontFamily:'var(--font-data)' } }}
-                  />
-                )}
-                {keys.map(k => {
-                  const seg = snap.segments[parseInt(k.slice(1))]
-                  if (!seg) return null
-                  return (
-                    <Bar key={k} dataKey={k} stackId="merit"
-                      fill={stationColour(seg.station)}
-                      maxBarSize={9999}
-                    >
-                      <Cell fill={stationColour(seg.station)} />
-                    </Bar>
-                  )
-                })}
-              </ComposedChart>
-            </ResponsiveContainer>
+            {/* Merit order chart: custom SVG — X = cumulative MW, Y = bid price */}
+            <MeritOrderSvg segments={snap.segments} spotPrice={spotPrice ?? null} />
             <div style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)',
               marginTop:'0.5rem' }}>
               Each bar = one DUID bid · width = MW offered · height = bid price · use ‹ › to step through intervals
