@@ -10,54 +10,62 @@ import {
 // Others will be validated by neodebug — update once that runs
 interface Station { name: string; region: Region; fuel: 'gas'|'coal' }
 
+// Station names exactly as used by NEOpoint (from AEMO registration list)
+// ✓ = confirmed working via /api/neodebug
 const STATIONS: Station[] = [
   // ── NSW coal ──
-  { name: 'Bayswater',                       region: 'NSW1', fuel: 'coal' },
-  { name: 'Eraring',                         region: 'NSW1', fuel: 'coal' },
-  { name: 'Mt Piper',                        region: 'NSW1', fuel: 'coal' },
-  { name: 'Vales Point B',                   region: 'NSW1', fuel: 'coal' },
+  { name: 'Eraring',                      region: 'NSW1', fuel: 'coal' }, // ✓
+  { name: 'Bayswater',                    region: 'NSW1', fuel: 'coal' },
+  { name: 'Mt Piper',                     region: 'NSW1', fuel: 'coal' },
+  { name: 'Vales Pt',                     region: 'NSW1', fuel: 'coal' }, // AEMO name
   // ── NSW gas ──
-  { name: 'Colongra',                        region: 'NSW1', fuel: 'gas'  },
-  { name: 'Tallawarra',                      region: 'NSW1', fuel: 'gas'  },
-  { name: 'Uranquinty',                      region: 'NSW1', fuel: 'gas'  },
-  { name: 'Hunter Valley Energy Centre',     region: 'NSW1', fuel: 'gas'  },
-  { name: 'Marulan',                         region: 'NSW1', fuel: 'gas'  },
+  { name: 'Tallawarra',                   region: 'NSW1', fuel: 'gas'  },
+  { name: 'Colongra',                     region: 'NSW1', fuel: 'gas'  },
+  { name: 'Uranquinty',                   region: 'NSW1', fuel: 'gas'  },
+  { name: 'Hunter Power Station',         region: 'NSW1', fuel: 'gas'  }, // AEMO name
+  { name: 'Smithfield Energy Facility',   region: 'NSW1', fuel: 'gas'  }, // AEMO name
   // ── VIC coal ──
-  { name: 'Loy Yang A',                      region: 'VIC1', fuel: 'coal' },
-  { name: 'Loy Yang B',                      region: 'VIC1', fuel: 'coal' },
-  { name: 'Yallourn',                        region: 'VIC1', fuel: 'coal' },
+  { name: 'Loy Yang A',                   region: 'VIC1', fuel: 'coal' },
+  { name: 'Loy Yang B',                   region: 'VIC1', fuel: 'coal' },
+  { name: 'Yallourn',                     region: 'VIC1', fuel: 'coal' },
   // ── VIC gas ──
-  { name: 'Mortlake Power Station',          region: 'VIC1', fuel: 'gas'  },
-  { name: 'Jeeralang',                       region: 'VIC1', fuel: 'gas'  },
-  { name: 'Laverton North',                  region: 'VIC1', fuel: 'gas'  },
-  { name: 'Somerton',                        region: 'VIC1', fuel: 'gas'  },
-  { name: 'Newport Power Station',           region: 'VIC1', fuel: 'gas'  },
-  { name: 'Bairnsdale Power Station',        region: 'VIC1', fuel: 'gas'  },
-  { name: 'Valley Power Peaker',             region: 'VIC1', fuel: 'gas'  },
+  { name: 'Mortlake',                     region: 'VIC1', fuel: 'gas'  }, // AEMO name (not "Mortlake Power Station")
+  { name: 'Jeeralang A',                  region: 'VIC1', fuel: 'gas'  }, // AEMO name
+  { name: 'Jeeralang B',                  region: 'VIC1', fuel: 'gas'  }, // AEMO name
+  { name: 'Laverton North',               region: 'VIC1', fuel: 'gas'  },
+  { name: 'Somerton',                     region: 'VIC1', fuel: 'gas'  }, // AEMO: "Somerton" (DUID: AGLSOM)
+  { name: 'Newport',                      region: 'VIC1', fuel: 'gas'  }, // AEMO name (not "Newport Power Station")
+  { name: 'Bairnsdale',                   region: 'VIC1', fuel: 'gas'  }, // AEMO name
+  { name: 'Valley Power Peaking Facility', region: 'VIC1', fuel: 'gas' }, // AEMO name
   // ── QLD coal ──
-  { name: 'Tarong',                          region: 'QLD1', fuel: 'coal' },
-  { name: 'Tarong North',                    region: 'QLD1', fuel: 'coal' },
-  { name: 'Callide B',                       region: 'QLD1', fuel: 'coal' },
-  { name: 'Callide C',                       region: 'QLD1', fuel: 'coal' },
-  { name: 'Stanwell',                        region: 'QLD1', fuel: 'coal' },
-  { name: 'Millmerran',                      region: 'QLD1', fuel: 'coal' },
-  { name: 'Gladstone',                       region: 'QLD1', fuel: 'coal' },
-  { name: 'Kogan Creek',                     region: 'QLD1', fuel: 'coal' },
+  { name: 'Gladstone',                    region: 'QLD1', fuel: 'coal' }, // ✓
+  { name: 'Tarong',                       region: 'QLD1', fuel: 'coal' },
+  { name: 'Tarong North',                 region: 'QLD1', fuel: 'coal' },
+  { name: 'Callide B',                    region: 'QLD1', fuel: 'coal' },
+  { name: 'Callide C',                    region: 'QLD1', fuel: 'coal' },
+  { name: 'Stanwell',                     region: 'QLD1', fuel: 'coal' },
+  { name: 'Millmerran',                   region: 'QLD1', fuel: 'coal' },
+  { name: 'Kogan Creek',                  region: 'QLD1', fuel: 'coal' },
   // ── QLD gas ──
-  { name: 'Darling Downs Power Station',     region: 'QLD1', fuel: 'gas'  },
-  { name: 'Condamine Power Station',         region: 'QLD1', fuel: 'gas'  },
-  { name: 'Braemar Power Station',           region: 'QLD1', fuel: 'gas'  },
-  { name: 'Braemar 2 Power Station',         region: 'QLD1', fuel: 'gas'  },
-  { name: 'Oakey Power Station',             region: 'QLD1', fuel: 'gas'  },
-  { name: 'Swanbank E Gas Turbine',          region: 'QLD1', fuel: 'gas'  },
+  { name: 'Darling Downs',               region: 'QLD1', fuel: 'gas'  }, // AEMO name (DDPS1)
+  { name: 'Condamine A',                  region: 'QLD1', fuel: 'gas'  }, // AEMO name (CPSA)
+  { name: 'Braemar Power',               region: 'QLD1', fuel: 'gas'  }, // AEMO name
+  { name: 'Braemar 2 Power',             region: 'QLD1', fuel: 'gas'  }, // AEMO name
+  { name: 'Oakey',                        region: 'QLD1', fuel: 'gas'  }, // AEMO name
+  { name: 'Swanbank E',                   region: 'QLD1', fuel: 'gas'  }, // AEMO name (SWAN_E)
+  { name: 'Townsville Gas Turbine',       region: 'QLD1', fuel: 'gas'  }, // AEMO name (YABULU)
+  { name: 'Yarwun',                       region: 'QLD1', fuel: 'gas'  }, // AEMO name (YARWUN_1)
+  { name: 'Roma',                         region: 'QLD1', fuel: 'gas'  }, // AEMO name (ROMA_7/8)
   // ── SA gas ──
-  { name: 'Torrens Island Power Station A',  region: 'SA1',  fuel: 'gas'  },
-  { name: 'Torrens Island Power Station B',  region: 'SA1',  fuel: 'gas'  },
-  { name: 'Osborne Power Station',           region: 'SA1',  fuel: 'gas'  },
-  { name: 'Pelican Point Power Station',     region: 'SA1',  fuel: 'gas'  },
-  { name: 'Quarantine Power Station',        region: 'SA1',  fuel: 'gas'  },
-  { name: 'Snuggery Power Station',          region: 'SA1',  fuel: 'gas'  },
-  { name: 'Ladbroke Grove Power Station',    region: 'SA1',  fuel: 'gas'  },
+  { name: 'Torrens Island B',             region: 'SA1',  fuel: 'gas'  }, // AEMO name (TORRB1-4; A retired)
+  { name: 'Osborne',                      region: 'SA1',  fuel: 'gas'  }, // AEMO name (OSB-AG)
+  { name: 'Pelican Point',               region: 'SA1',  fuel: 'gas'  }, // AEMO name (PPCCGT)
+  { name: 'Quarantine',                   region: 'SA1',  fuel: 'gas'  }, // AEMO name (QPS1-5)
+  { name: 'Ladbroke Grove',              region: 'SA1',  fuel: 'gas'  }, // AEMO name (LADBROK1-2)
+  { name: 'Dry Creek Gas Turbine',        region: 'SA1',  fuel: 'gas'  }, // AEMO name (DRYCGT1-3)
+  { name: 'Mintaro Gas Turbine',          region: 'SA1',  fuel: 'gas'  }, // AEMO name (MINTARO)
+  { name: 'Hallett',                      region: 'SA1',  fuel: 'gas'  }, // AEMO name (AGLHAL)
+  { name: 'Barker Inlet',                region: 'SA1',  fuel: 'gas'  }, // AEMO name (BARKIPS1)
 ]
 
 // ── Price buckets ─────────────────────────────────────────────────────────────
