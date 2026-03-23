@@ -15,61 +15,60 @@ async function probe(name: string, params: Record<string, string>) {
   }
 }
 
+function weeksAgo(n: number): string {
+  const d = new Date()
+  d.setUTCDate(d.getUTCDate() - n * 7)
+  return d.toISOString().slice(0, 10) + ' 00:00'
+}
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setUTCDate(d.getUTCDate() - n)
+  return d.toISOString().slice(0, 10) + ' 00:00'
+}
+
 export async function GET() {
-  const yesterday = new Date()
-  yesterday.setUTCDate(yesterday.getUTCDate() - 1)
-  const from = yesterday.toISOString().slice(0, 10) + ' 00:00'
-
   const tests = await Promise.all([
-    // Gladstone - confirmed working - full sample to see column format
-    probe('Gladstone station bids - Daily', {
-      f: '104 Bids - Energy\\Station Bids at Actual Prices 5min',
-      from, period: 'Daily', instances: 'GEN;Gladstone', section: '-1' }),
+    // Price setter - using from = past date so period covers completed data
+    probe('PS by Station SA1 Weekly (from 2w ago)', {
+      f: '108 Price Setter\\Energy Pricesetting by Station',
+      from: weeksAgo(2), period: 'Weekly', instances: 'SA1', section: '-1' }),
+    probe('PS by Station NSW1 Weekly (from 2w ago)', {
+      f: '108 Price Setter\\Energy Pricesetting by Station',
+      from: weeksAgo(2), period: 'Weekly', instances: 'NSW1', section: '-1' }),
+    probe('PS by Station VIC1 Weekly (from 2w ago)', {
+      f: '108 Price Setter\\Energy Pricesetting by Station',
+      from: weeksAgo(2), period: 'Weekly', instances: 'VIC1', section: '-1' }),
+    probe('PS by Station QLD1 Weekly (from 2w ago)', {
+      f: '108 Price Setter\\Energy Pricesetting by Station',
+      from: weeksAgo(2), period: 'Weekly', instances: 'QLD1', section: '-1' }),
 
-    // Station bids with different periods
-    probe('Gladstone - Three Days', {
-      f: '104 Bids - Energy\\Station Bids at Actual Prices 5min',
-      from, period: 'Three Days', instances: 'GEN;Gladstone', section: '-1' }),
-    probe('Gladstone - Weekly', {
-      f: '104 Bids - Energy\\Station Bids at Actual Prices 5min',
-      from, period: 'Weekly', instances: 'GEN;Gladstone', section: '-1' }),
+    // Try the other price setter report too
+    probe('PS Plant Bandcost SA1 Weekly (from 2w ago)', {
+      f: '108 Price Setter\\Energy Pricesetter Plant Bandcost',
+      from: weeksAgo(2), period: 'Weekly', instances: 'SA1', section: '-1' }),
+    probe('PS Plant Bandcost NSW1 Weekly (from 2w ago)', {
+      f: '108 Price Setter\\Energy Pricesetter Plant Bandcost',
+      from: weeksAgo(2), period: 'Weekly', instances: 'NSW1', section: '-1' }),
 
-    // Region bids with different periods
-    probe('Region bids NSW1 - Weekly', {
+    // Also try Daily from further back
+    probe('PS by Station NSW1 Daily (from 8d ago)', {
+      f: '108 Price Setter\\Energy Pricesetting by Station',
+      from: daysAgo(8), period: 'Daily', instances: 'NSW1', section: '-1' }),
+    probe('PS fueltype NSW1 Weekly (from 2w ago)', {
+      f: '108 Price Setter\\Pricesetter fueltype 30min',
+      from: weeksAgo(2), period: 'Weekly', instances: 'NSW1', section: '-1' }),
+    probe('PS station 30min NSW1 Weekly (from 2w ago)', {
+      f: '108 Price Setter\\Pricesetter station 30min',
+      from: weeksAgo(2), period: 'Weekly', instances: 'NSW1', section: '-1' }),
+
+    // Region bids with Weekly period from 2w ago
+    probe('Region bids NSW1 Weekly (from 2w ago)', {
       f: '104 Bids - Energy\\Region Bids at Actual Prices 5min',
-      from, period: 'Weekly', instances: 'GEN;NSW1', section: '-1' }),
-
-    // Price setter with different periods - try each
-    probe('PS fueltype - Daily', {
-      f: '108 Price Setter\\Pricesetter fueltype 30min',
-      from, period: 'Daily', instances: 'NSW1', section: '-1' }),
-    probe('PS fueltype - Weekly', {
-      f: '108 Price Setter\\Pricesetter fueltype 30min',
-      from, period: 'Weekly', instances: 'NSW1', section: '-1' }),
-    probe('PS fueltype - Three Days', {
-      f: '108 Price Setter\\Pricesetter fueltype 30min',
-      from, period: 'Three Days', instances: 'NSW1', section: '-1' }),
-    probe('PS station - Daily', {
-      f: '108 Price Setter\\Pricesetter station 30min',
-      from, period: 'Daily', instances: 'NSW1', section: '-1' }),
-    probe('PS station - Weekly', {
-      f: '108 Price Setter\\Pricesetter station 30min',
-      from, period: 'Weekly', instances: 'NSW1', section: '-1' }),
-    probe('PS fueltype - Monthly', {
-      f: '108 Price Setter\\Pricesetter fueltype 30min',
-      from, period: 'Monthly', instances: 'NSW1', section: '-1' }),
-    probe('PS station - Monthly', {
-      f: '108 Price Setter\\Pricesetter station 30min',
-      from, period: 'Monthly', instances: 'NSW1', section: '-1' }),
-
-    // Also try the confirmed-working station with longer periods
-    probe('Loy Yang B - Weekly', {
+      from: weeksAgo(2), period: 'Weekly', instances: 'GEN;NSW1', section: '-1' }),
+    probe('Station bids Gladstone Weekly (from 2w ago)', {
       f: '104 Bids - Energy\\Station Bids at Actual Prices 5min',
-      from, period: 'Weekly', instances: 'GEN;Loy Yang B', section: '-1' }),
-    probe('Hunter Power Station - Weekly', {
-      f: '104 Bids - Energy\\Station Bids at Actual Prices 5min',
-      from, period: 'Weekly', instances: 'GEN;Hunter Power Station', section: '-1' }),
+      from: weeksAgo(2), period: 'Weekly', instances: 'GEN;Gladstone', section: '-1' }),
   ])
 
-  return NextResponse.json({ ok: true, from, tests })
+  return NextResponse.json({ ok: true, tests })
 }
