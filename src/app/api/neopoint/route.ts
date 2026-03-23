@@ -3,11 +3,30 @@ import { NextResponse, NextRequest } from 'next/server'
 const NEO_BASE = 'https://www.neopoint.com.au/Service/Json'
 const NEO_KEY  = process.env.NEO_KEY ?? 'squshe10'
 
-// Lightweight cache: report key → { data, at }
+// Simple in-memory cache
 const cache = new Map<string, { data: any; at: number }>()
 const TTL   = 60 * 60 * 1000  // 1 hour
 
-export const revalidate = 0  // no static caching — use our own TTL
+// Queue to enforce max 1 concurrent request to NEOpoint
+let inFlight = 0
+const queue: Array<() => void> = []
+
+function acquireSlot(): Promise<void> {
+  return new Promise(resolve => {
+    if (inFlight === 0) { inFlight++; resolve() }
+    else queue.push(() => { inFlight++; resolve() })
+  })
+}
+
+function releaseSlot() {
+  inFlight--
+  if (queue.length > 0) {
+    const next = queue.shift()!
+    next()
+  }
+}
+
+export const revalidate = 0
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
@@ -17,33 +36,26 @@ export async function GET(req: NextRequest) {
   const period    = searchParams.get('period') ?? 'Daily'
   const section   = searchParams.get('section') ?? '-1'
 
-  if (!report) return NextResponse.json({ ok: false, error: 'Missing report param' }, { status: 400 })
+  if (!report) return NextResponse.json({ ok: false, error: 'Missing report' }, { status: 400 })
 
-  const cacheKey = `${report}|${from}|${instances}|${period}`
+  const cacheKey = `${report}|${from}|${instances}|${period}|${section}`
   const cached   = cache.get(cacheKey)
   if (cached && Date.now() - cached.at < TTL) {
     return NextResponse.json({ ok: true, data: cached.data, cached: true })
   }
 
+  await acquireSlot()
   try {
-    const qs = new URLSearchParams({
-      f:        report,
-      from,
-      period,
-      instances,
-      section,
-      key:      NEO_KEY,
-    }).toString()
-
+    const qs = new URLSearchParams({ f: report, from, period, instances, section, key: NEO_KEY })
     const res = await fetch(`${NEO_BASE}?${qs}`, {
-      cache:  'no-store',
-      signal: AbortSignal.timeout(15000),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(20000),
     })
 
     if (!res.ok) {
       const text = await res.text()
       return NextResponse.json(
-        { ok: false, error: `NEOpoint returned ${res.status}`, detail: text.slice(0, 200) },
+        { ok: false, error: `NEOpoint ${res.status}`, detail: text.slice(0, 300) },
         { status: 502 }
       )
     }
@@ -53,5 +65,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, data })
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 })
+  } finally {
+    releaseSlot()
   }
 }

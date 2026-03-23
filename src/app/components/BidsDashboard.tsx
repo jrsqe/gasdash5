@@ -159,6 +159,57 @@ async function fetchOneDay(date: string, instances: string): Promise<any[]> {
   return []
 }
 
+// ── Price setter fetch ───────────────────────────────────────────────────────
+const PS_REPORT = '108 Price Setter\\Energy Pricesetting by Station'
+
+// Price setter uses a fixed historical from date and Three Days period
+// The "DateTime" column actually contains station names in summary format
+async function fetchPriceSetter(region: NemRegion, fromDate: string): Promise<any[]> {
+  const p = new URLSearchParams({
+    report: PS_REPORT,
+    from:   `${fromDate} 00:00`,
+    period: 'Three Days',
+    instances: region,
+    section: '-1',
+  })
+  const r = await fetch(`/api/neopoint?${p}`)
+  const j = await r.json()
+  if (!j.ok) return []
+  if (Array.isArray(j.data)) return j.data
+  if (Array.isArray(j.data?.data)) return j.data.data
+  return []
+}
+
+// Parse PS response: { DateTime: "Station Name", "VIC1.PercentSetting": 0.49 }
+interface PsRow { station: string; pct: number; fuel: 'gas'|'coal'|'other' }
+
+function stationFuel(name: string): 'gas'|'coal'|'other' {
+  const n = name.toLowerCase()
+  const gasNames = ['colongra','tallawarra','uranquinty','hunter','smithfield',
+    'mortlake','jeeralang','laverton','somerton','newport','bairnsdale','valley power',
+    'darling downs','condamine','braemar','oakey','swanbank','townsville',
+    'yarwun','roma','torrens','osborne','pelican','quarantine','ladbroke',
+    'dry creek','mintaro','hallett','barker inlet']
+  const coalNames = ['bayswater','eraring','mt piper','vales','loy yang','yallourn',
+    'callide','millmerran','kogan','stanwell','tarong','gladstone']
+  if (gasNames.some(g => n.includes(g))) return 'gas'
+  if (coalNames.some(c => n.includes(c))) return 'coal'
+  return 'other'
+}
+
+function parsePsRows(rows: any[], region: NemRegion): PsRow[] {
+  const pctKey = `${region}.PercentSetting`
+  return rows
+    .map(r => ({
+      station: String(r.DateTime ?? ''),
+      pct: Math.round(Number(r[pctKey] ?? 0) * 1000) / 10,
+      fuel: stationFuel(String(r.DateTime ?? '')),
+    }))
+    .filter(r => r.station && r.pct > 0)
+    .sort((a, b) => b.pct - a.pct)
+    .slice(0, 25)
+}
+
 // ── Data processing ───────────────────────────────────────────────────────────
 function parseBands(row: any) {
   const out: { price: number; mw: number; duids: string[] }[] = []
@@ -305,7 +356,13 @@ export default function BidsDashboard() {
   const [region,   setRegion]   = useState<NemRegion>('NSW1')
   const [mode,     setMode]     = useState<FuelMode>('both')
   const [rows,     setRows]     = useState<any[]>([])
+  const [psRows,   setPsRows]   = useState<any[]>([])
+  const [psFrom,   setPsFrom]   = useState(() => {
+    // Default: 3 weeks ago so Three Days period covers completed data
+    const d = new Date(); d.setUTCDate(d.getUTCDate() - 21); return toIso(d)
+  })
   const [loading,  setLoading]  = useState(false)
+  const [psLoading,setPsLoading]= useState(false)
   const [progress, setProgress] = useState('')
   const [error,    setError]    = useState<string | null>(null)
 
@@ -354,6 +411,18 @@ export default function BidsDashboard() {
     run().catch(e => { if (!cancelled) { setError(String(e?.message || e)); setLoading(false) } })
     return () => { cancelled = true }
   }, [region, dates.join(',')])
+
+  // Fetch price setter separately (uses its own from date)
+  useEffect(() => {
+    let cancelled = false
+    setPsLoading(true); setPsRows([])
+    fetchPriceSetter(region, psFrom)
+      .then(data => { if (!cancelled) { setPsRows(data); setPsLoading(false) } })
+      .catch(() => { if (!cancelled) setPsLoading(false) })
+    return () => { cancelled = true }
+  }, [region, psFrom])
+
+  const psData = useMemo(() => parsePsRows(psRows, region), [psRows, region])
 
   const { chartRows: priceRows, stations } = useMemo(
     () => buildPriceRows(rows, mode), [rows, mode]
@@ -610,6 +679,90 @@ export default function BidsDashboard() {
           </div>
         </Card>
       )}
+
+      {/* ── Price Setter section ── */}
+      <div style={{ marginTop:'1.5rem' }}>
+        {/* Section header with its own date control */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+          flexWrap:'wrap', gap:'0.75rem', marginBottom:'0.75rem',
+          paddingBottom:'0.5rem', borderBottom:'1px solid var(--border)' }}>
+          <div>
+            <span style={{ fontFamily:'var(--font-data)', fontSize:'0.6rem',
+              color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.07em' }}>
+              Price Setter by Station
+            </span>
+            <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem',
+              color:'var(--muted)', marginLeft:'0.5rem' }}>
+              % of dispatch intervals as price setter · 3-day window
+            </span>
+          </div>
+          {/* PS date picker */}
+          <div style={{ display:'flex', alignItems:'center', gap:'0.4rem',
+            background:'var(--surface-2)', border:'1px solid var(--border)',
+            borderRadius:8, padding:'0.25rem 0.6rem' }}>
+            <label style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem',
+              color:'var(--muted)', whiteSpace:'nowrap' }}>Period start</label>
+            <input type="date" value={psFrom}
+              max={offsetDate(3)}
+              onChange={e => setPsFrom(e.target.value)}
+              style={{ fontFamily:'var(--font-data)', fontSize:'0.7rem',
+                color:'var(--text)', background:'transparent',
+                border:'none', outline:'none', cursor:'pointer' }} />
+            {psLoading && (
+              <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem',
+                color:'var(--muted)' }}>Loading…</span>
+            )}
+          </div>
+        </div>
+
+        {psData.length > 0 ? (
+          <Card>
+            <SectionHead
+              title={`Price Setting by Station · ${RLABEL[region]}`}
+              sub={`3 days from ${psFrom} · % of intervals as price setter`}
+            />
+            <div style={{ display:'flex', gap:'1rem', marginBottom:'0.5rem' }}>
+              {(['gas','coal','other'] as const).filter(f => psData.some(s => s.fuel === f)).map(f => (
+                <span key={f} style={{ display:'flex', alignItems:'center', gap:'0.3rem',
+                  fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--text)' }}>
+                  <span style={{ width:9, height:9, borderRadius:2, display:'inline-block',
+                    background: f === 'gas' ? '#FF9F0A' : f === 'coal' ? '#636366' : '#64D2FF' }} />
+                  {f}
+                </span>
+              ))}
+            </div>
+            <ResponsiveContainer width="100%" height={Math.max(220, psData.length * 22)}>
+              <BarChart data={psData} layout="vertical"
+                margin={{ top:4, right:64, bottom:0, left:160 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <XAxis type="number"
+                  tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
+                  tickFormatter={(v: number) => `${v}%`} />
+                <YAxis type="category" dataKey="station" width={155}
+                  tick={{ fill:'var(--text)', fontSize:9, fontFamily:'var(--font-data)' }} />
+                <Tooltip
+                  contentStyle={{ background:'var(--surface)', border:'1px solid var(--border)',
+                    borderRadius:8, fontFamily:'var(--font-data)', fontSize:'0.72rem' }}
+                  formatter={(v: any) => [`${v}%`, '% of intervals as price setter']}
+                />
+                <Bar dataKey="pct" radius={[0,3,3,0]}>
+                  {psData.map(s => (
+                    <Cell key={s.station}
+                      fill={s.fuel === 'gas' ? '#FF9F0A' : s.fuel === 'coal' ? '#636366' : '#64D2FF'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        ) : !psLoading && (
+          <Card style={{ padding:'1rem' }}>
+            <div style={{ color:'var(--muted)', fontFamily:'var(--font-data)', fontSize:'0.72rem' }}>
+              No price setter data for {RLABEL[region]} starting {psFrom}.
+              Try moving the period start date — data must be from a completed 3-day window.
+            </div>
+          </Card>
+        )}
+      </div>
 
       <div style={{ borderTop:'1px solid var(--border)', paddingTop:'0.75rem', marginTop:'1rem',
         fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)',
