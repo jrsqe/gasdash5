@@ -10,10 +10,19 @@ const FIVE_MIN_PERIODS: Record<string, number> = {
   '1M': 8928, '3M': 26784, '1y': 105120, 'fy': 105120,
 }
 
+// OE API maximum date range per interval (from docs.openelectricity.org.au/api-reference/data-limits)
+export const INTERVAL_MAX_DAYS: Record<string, number> = {
+  '5m': 8,
+  '1h': 32,
+  '1d': 366,
+}
+
 export type IntervalOption = '5m' | '1h' | '1d'
 
 export interface EnergyParams {
   interval: IntervalOption
+  dateFrom?: string   // YYYY-MM-DD
+  dateTo?:   string   // YYYY-MM-DD
 }
 
 function getHeaders() {
@@ -30,6 +39,83 @@ async function apiFetch(url: string, params?: Record<string, string>) {
     throw new Error(`API ${res.status}: ${text.slice(0, 200)}`)
   }
   return res.json()
+}
+
+// Split a date range into chunks of maxDays and fetch each chunk,
+// then merge all timeseries results together
+async function apiFetchChunked(
+  url: string,
+  params: Record<string, string>,
+  maxDays: number
+): Promise<any> {
+  const { date_min, date_max, ...baseParams } = params
+  if (!date_min || !date_max) return apiFetch(url, params)
+
+  const start  = new Date(date_min)
+  const end    = new Date(date_max)
+  const chunks: { from: string; to: string }[] = []
+
+  let cur = new Date(start)
+  while (cur <= end) {
+    const chunkEnd = new Date(cur)
+    chunkEnd.setUTCDate(chunkEnd.getUTCDate() + maxDays - 1)
+    const actualEnd = chunkEnd > end ? end : chunkEnd
+    chunks.push({
+      from: cur.toISOString().slice(0, 10),
+      to:   actualEnd.toISOString().slice(0, 10),
+    })
+    cur = new Date(actualEnd)
+    cur.setUTCDate(cur.getUTCDate() + 1)
+  }
+
+  // Fetch all chunks in parallel (up to 3 at a time to be polite)
+  const allResponses: any[] = []
+  for (let i = 0; i < chunks.length; i += 3) {
+    const batch = chunks.slice(i, i + 3)
+    const results = await Promise.all(batch.map(c =>
+      apiFetch(url, { ...baseParams, date_min: c.from, date_max: c.to })
+    ))
+    allResponses.push(...results)
+  }
+
+  // Merge: combine all data[] arrays from each response
+  // The first response is the base; we append data from subsequent responses
+  if (!allResponses.length) return {}
+  const merged = allResponses[0]
+  for (let i = 1; i < allResponses.length; i++) {
+    const resp = allResponses[i]
+    if (!resp?.data) continue
+    for (const newItem of resp.data) {
+      // Find matching item in merged.data by id/name
+      const existing = merged.data?.find((m: any) =>
+        (m.id && m.id === newItem.id) ||
+        (m.unit_code && m.unit_code === newItem.unit_code) ||
+        (m.name && m.name === newItem.name)
+      )
+      if (existing) {
+        // Merge results arrays
+        if (existing.results && newItem.results) {
+          for (const newResult of newItem.results) {
+            const existingResult = existing.results.find((r: any) =>
+              JSON.stringify(r.columns) === JSON.stringify(newResult.columns)
+            )
+            if (existingResult && Array.isArray(existingResult.data)) {
+              existingResult.data.push(...(newResult.data ?? []))
+            } else {
+              existing.results.push(newResult)
+            }
+          }
+        }
+        // Merge history data
+        if (existing.history?.data && newItem.history?.data) {
+          existing.history.data.push(...newItem.history.data)
+        }
+      } else {
+        merged.data.push(newItem)
+      }
+    }
+  }
+  return merged
 }
 
 async function fetchGasFacilities() {
@@ -97,7 +183,7 @@ function aggregateFacility(unitSeries: Record<string, [string, number][]>, inter
 }
 
 
-export async function fetchFuelMix(region: string, interval: string): Promise<{
+export async function fetchFuelMix(region: string, interval: string, dateParams: Record<string,string> = {}): Promise<{
   dates: string[]
   series: Record<string, (number | null)[]>
 }> {
@@ -106,13 +192,14 @@ export async function fetchFuelMix(region: string, interval: string): Promise<{
   //   primary_grouping=network_region
   //   secondary_grouping=fueltech_group   ← groups by fuel tech group
   //   network_region=NSW1
-  const resp = await apiFetch(`${BASE_URL}/data/network/NEM`, {
+  const resp = await apiFetchChunked(`${BASE_URL}/data/network/NEM`, {
     metrics:           'power',
     network_region:    region,
     interval,
     primary_grouping:  'network_region',
     secondary_grouping:'fueltech_group',
-  })
+    ...dateParams,
+  }, INTERVAL_MAX_DAYS[interval] ?? 32)
 
   const raw: Record<string, Record<string, number>> = {}
 
@@ -184,7 +271,11 @@ export async function fetchFuelMix(region: string, interval: string): Promise<{
 }
 
 
-export async function getEnergyData({ interval }: EnergyParams) {
+export async function getEnergyData({ interval, dateFrom, dateTo }: EnergyParams) {
+  // Build date range params if provided — OE API uses date_min/date_max
+  const dateParams: Record<string, string> = {}
+  if (dateFrom) dateParams.date_min = dateFrom
+  if (dateTo)   dateParams.date_max = dateTo
   const facilities = await fetchGasFacilities()
   const regionData: Record<string, any> = {}
 
@@ -195,10 +286,11 @@ export async function getEnergyData({ interval }: EnergyParams) {
     // Spot price — use API default range (max available)
     let prices: Record<string, number> = {}
     try {
-      const priceResp = await apiFetch(`${BASE_URL}/market/network/NEM`, {
+      const priceResp = await apiFetchChunked(`${BASE_URL}/market/network/NEM`, {
         metrics: 'price', network_region: region,
         interval, primary_grouping: 'network_region',
-      })
+        ...dateParams,
+      }, INTERVAL_MAX_DAYS[interval] ?? 32)
       const firstSeries = Object.values(parseTimeseries(priceResp))[0] ?? []
       for (const [ts, v] of firstSeries) prices[toAEST(ts)] = v
     } catch (e) { console.warn(`Price fetch failed for ${region}:`, e) }
@@ -207,9 +299,9 @@ export async function getEnergyData({ interval }: EnergyParams) {
     const facilitySeriesMap: { name: string; data: Record<string, number> }[] = []
     for (const f of rFacilities) {
       try {
-        const genResp = await apiFetch(`${BASE_URL}/data/facilities/NEM`, {
-          facility_code: f.code, metrics: 'power', interval,
-        })
+        const genResp = await apiFetchChunked(`${BASE_URL}/data/facilities/NEM`, {
+          facility_code: f.code, metrics: 'power', interval, ...dateParams,
+        }, INTERVAL_MAX_DAYS[interval] ?? 32)
         const unitSeries = parseTimeseries(genResp)
         if (Object.keys(unitSeries).length > 0)
           facilitySeriesMap.push({ name: f.name, data: aggregateFacility(unitSeries, interval) })
@@ -235,7 +327,7 @@ export async function getEnergyData({ interval }: EnergyParams) {
         if (v !== null) totalGenPerTime[ts] = (totalGenPerTime[ts] ?? 0) + v
     const totalGenVals = Object.values(totalGenPerTime)
 
-    const fuelMix = await fetchFuelMix(region, interval)
+    const fuelMix = await fetchFuelMix(region, interval, dateParams)
 
     regionData[label] = {
       facilities: facilitySeriesMap.map(f => f.name),

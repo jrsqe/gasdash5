@@ -21,23 +21,27 @@ interface CacheEntry<T> { data: T; fetchedAt: number }
 const elecCache = new Map<string, CacheEntry<any>>()
 let gbbCache: CacheEntry<any> | null = null
 
-export function useElecData(interval: string) {
+export function useElecData(interval: string, dateFrom?: string, dateTo?: string) {
   const [payload,   setPayload]   = useState<any>(null)
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState<string | null>(null)
   const [fetchedAt, setFetchedAt] = useState<number | null>(null)
 
-  const fetch_ = useCallback(async (iv: string, force = false) => {
-    const cached = elecCache.get(iv)
+  const fetch_ = useCallback(async (iv: string, from?: string, to?: string, force = false) => {
+    const cacheKey = `${iv}|${from ?? ''}|${to ?? ''}`
+    const cached = elecCache.get(cacheKey)
     if (!force && cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
       setPayload(cached.data); setFetchedAt(cached.fetchedAt); return
     }
     setLoading(true); setError(null)
     try {
-      const res  = await fetch(`/api/energy?interval=${iv}`)
+      const params = new URLSearchParams({ interval: iv })
+      if (from) params.set('from', from)
+      if (to)   params.set('to', to)
+      const res  = await fetch(`/api/energy?${params}`)
       const json = await res.json()
       if (!json.ok) throw new Error(json.error)
-      elecCache.set(iv, { data: json, fetchedAt: Date.now() })
+      elecCache.set(cacheKey, { data: json, fetchedAt: Date.now() })
       setPayload(json); setFetchedAt(Date.now())
     } catch (e: any) { setError(e.message) }
     finally { setLoading(false) }
