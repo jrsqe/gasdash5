@@ -111,11 +111,42 @@ const BUCKETS = [
   { k:'$1k+',     lo:1000, hi:1e9,  col:'#BF5AF2' },
 ]
 
-const STATION_COLOURS = [
-  '#0071E3','#FF9F0A','#30C254','#FF453A','#BF5AF2',
-  '#64D2FF','#FF6B35','#FFD60A','#98989D','#FF2D55',
-  '#5E5CE6','#34C759','#FF9500','#00C7BE','#AF52DE',
-]
+const GAS_STATION_COLOURS: Record<string, string> = {
+  'Colongra':         '#0071E3',
+  'Tallawarra':       '#FF9F0A',
+  'Uranquinty':       '#30C254',
+  'Hunter PS':        '#FF453A',
+  'Smithfield':       '#BF5AF2',
+  'Mortlake':         '#64D2FF',
+  'Jeeralang A':      '#FF6B35',
+  'Jeeralang B':      '#FF2D55',
+  'Laverton North':   '#5E5CE6',
+  'Somerton':         '#34C759',
+  'Newport':          '#FF9500',
+  'Bairnsdale':       '#00C7BE',
+  'Valley Power':     '#AF52DE',
+  'Darling Downs':    '#0071E3',
+  'Condamine':        '#FF9F0A',
+  'Braemar':          '#30C254',
+  'Braemar 2':        '#FF453A',
+  'Oakey':            '#BF5AF2',
+  'Swanbank E':       '#64D2FF',
+  'Townsville GT':    '#FF6B35',
+  'Yarwun':           '#FFD60A',
+  'Roma':             '#98989D',
+  'Torrens Isl B':    '#0071E3',
+  'Osborne':          '#FF9F0A',
+  'Pelican Point':    '#30C254',
+  'Quarantine':       '#FF453A',
+  'Ladbroke Grove':   '#BF5AF2',
+  'Dry Creek GT':     '#64D2FF',
+  'Mintaro GT':       '#FF6B35',
+  'Hallett':          '#FFD60A',
+  'Barker Inlet':     '#98989D',
+}
+function stationColour(name: string): string {
+  return GAS_STATION_COLOURS[name] ?? '#64D2FF'
+}
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function toIso(d: Date) { return d.toISOString().slice(0, 10) }
