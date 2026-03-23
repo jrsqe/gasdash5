@@ -53,32 +53,8 @@ function fmtDateTime(s: string) {
   return `${dd}/${mm} ${time}`
 }
 
-// ── OE API: get gas+coal stations per region ─────────────────────────────────
-const GAS_FT  = new Set(['gas_ccgt','gas_ocgt','gas_recip','gas_steam','gas_wcmg'])
-const COAL_FT = new Set(['coal_black','coal_brown'])
-
+// ── Station list ─────────────────────────────────────────────────────────────
 interface Station { name: string; region: Region; fuel: 'gas'|'coal' }
-let stationCache: Station[] | null = null
-
-async function fetchGasCoalStations(): Promise<Station[]> {
-  if (stationCache) return stationCache
-  const res  = await fetch('https://api.openelectricity.org.au/v4/facilities/?network_code=NEM', {
-    headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_OE_TOKEN ?? ''}` },
-  })
-  // OE requires auth — fall back to static list if it fails
-  if (!res.ok) return STATIC_STATIONS
-  const data = await res.json()
-  const out: Station[] = []
-  for (const f of data.data ?? []) {
-    if (!REGIONS.includes(f.network_region)) continue
-    const hasGas  = (f.units ?? []).some((u: any) => GAS_FT.has(u.fueltech_id)  && u.status_id === 'operating')
-    const hasCoal = (f.units ?? []).some((u: any) => COAL_FT.has(u.fueltech_id) && u.status_id === 'operating')
-    if (hasGas)  out.push({ name: f.name, region: f.network_region, fuel: 'gas'  })
-    if (hasCoal) out.push({ name: f.name, region: f.network_region, fuel: 'coal' })
-  }
-  stationCache = out.length > 0 ? out : STATIC_STATIONS
-  return stationCache
-}
 
 // Static fallback list of major NEM gas + coal stations (station names as NEOpoint expects)
 const STATIC_STATIONS: Station[] = [
@@ -417,7 +393,6 @@ export default function BidsDashboard() {
   const [region,      setRegion]      = useState<Region>('NSW1')
   const [window,      setWindow]      = useState<Window>('7d')
   const [fuelFilter,  setFuelFilter]  = useState<FuelFilter>('both')
-  const [stations,    setStations]    = useState<Station[]>([])
 
   // Bid data: stationName → rows[]
   const [bidData,     setBidData]     = useState<Record<string, any[]>>({})
@@ -433,25 +408,23 @@ export default function BidsDashboard() {
   const days = window === '1d' ? 1 : window === '3d' ? 3 : 7
   const fromDate = daysAgo(days)
 
-  // Fetch station list on mount
-  useEffect(() => {
-    fetchGasCoalStations().then(setStations).catch(() => setStations(STATIC_STATIONS))
-  }, [])
-
-  // Filtered stations for current region + fuel filter
+  // Filtered stations for current region + fuel filter — use static list directly
   const filteredStations = useMemo(() =>
-    stations.filter(s =>
+    STATIC_STATIONS.filter(s =>
       s.region === region &&
       (fuelFilter === 'both' || s.fuel === fuelFilter)
     )
-  , [stations, region, fuelFilter])
+  , [region, fuelFilter])
 
-  // Fetch bid data when region/window/filter changes
+  // Fetch bid data — stable primitive deps (region, fuelFilter, fromDate)
   useEffect(() => {
-    if (!filteredStations.length) return
+    const stations = STATIC_STATIONS.filter(s =>
+      s.region === region && (fuelFilter === 'both' || s.fuel === fuelFilter)
+    )
+    if (!stations.length) { setBidLoading(false); return }
     setBidLoading(true); setBidError(null); setBidData({})
 
-    const fetches = filteredStations.map(async s => {
+    const fetches = stations.map(async s => {
       const rows = await neoJson(
         '104 Bids - Energy\\Station Bids at Actual Prices 5min',
         fromDate,
@@ -468,7 +441,8 @@ export default function BidsDashboard() {
       setBidData(data)
       setBidLoading(false)
     }).catch(e => { setBidError(e.message); setBidLoading(false) })
-  }, [filteredStations.map(s => s.name).join(','), fromDate])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region, fuelFilter, fromDate])
 
   // Fetch price setter
   useEffect(() => {
