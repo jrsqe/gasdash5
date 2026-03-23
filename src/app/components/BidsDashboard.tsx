@@ -344,47 +344,6 @@ function buildMeritSnapshots(rows: any[]): Array<{ time: string; dateTime: strin
 
 // Build merit order chart data — pick one interval per hour (or specific time)
 // Returns: array of { time, segments } for a time selector
-function buildMeritSnapshots(rows: any[]): Array<{ time: string; dateTime: string; segments: MeritSegment[] }> {
-  if (!rows.length) return []
-  // Sample every 12 rows = 1 hour
-  return rows
-    .filter((_, i) => i % 12 === 0)
-    .map(row => {
-      const dt = String(row.DateTime || '')
-      return {
-        time:     fmtDT(dt),
-        dateTime: dt,
-        segments: buildMeritOrder(row),
-      }
-    })
-    .filter(s => s.segments.length > 0)
-}
-
-// For the recharts bar chart: convert segments to a single row with station keys
-// Each station gets a key like "Colongra|0" (station|segmentIndex to handle multiple bids)
-interface MeritChartRow { [key: string]: any }
-
-function segmentsToChartRow(segments: MeritSegment[]): {
-  row: MeritChartRow
-  keys: string[]
-  stationKeys: Record<string, string>  // key → station name
-} {
-  const row: MeritChartRow = {}
-  const keys: string[]     = []
-  const stationKeys: Record<string, string> = {}
-  
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i]
-    const k   = `s${i}`
-    row[k]    = seg.mw
-    keys.push(k)
-    stationKeys[k] = seg.station
-    // Store price metadata for tooltip
-    row[`${k}_price`] = seg.price
-  }
-  return { row, keys, stationKeys }
-}
-
 // Chart 1: station bid prices over time (volume-weighted avg per station)
 function buildPriceRows(rows: any[], mode: FuelMode) {
   const stationSet = new Set<string>()
