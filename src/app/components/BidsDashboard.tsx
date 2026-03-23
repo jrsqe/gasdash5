@@ -120,7 +120,7 @@ const DUID_STATION: Record<string, string> = {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Region     = 'NSW1'|'VIC1'|'QLD1'|'SA1'
-type Window     = '1d'|'3d'|'7d'
+type TimeWindow = '1d'|'3d'|'7d'
 type FuelFilter = 'gas'|'coal'|'both'
 
 const REGIONS: Region[] = ['NSW1','VIC1','QLD1','SA1']
@@ -199,6 +199,7 @@ function filterBands(raw: RawBand[], filter: FuelFilter): RawBand[] {
 
 // ── Build time-series bid stack ───────────────────────────────────────────────
 function buildStack(rows: any[], filter: FuelFilter): Record<string,any>[] {
+  if (!rows?.length) return []
   return rows.filter((_,i) => i % 6 === 0).map(row => {
     const bands = filterBands(parseRawBands(row), filter)
     const out: Record<string,any> = { time: fmtDT(String(row.DateTime ?? '')) }
@@ -223,6 +224,7 @@ interface StationSummary {
 }
 
 function buildStationSummary(rows: any[], filter: FuelFilter): StationSummary[] {
+  if (!rows?.length) return []
   // Accumulate MW per station per bucket across all rows
   const acc: Record<string, { fuel:'gas'|'coal'; bucketSums: Record<string,number>; count:number }> = {}
 
@@ -278,7 +280,7 @@ function buildStationSummary(rows: any[], filter: FuelFilter): StationSummary[] 
 const FUEL_COL = { gas: '#FF9F0A', coal: '#636366' }
 
 function BidStackChart({ chartRows, region, filter, win }: {
-  chartRows: Record<string,any>[]; region: Region; filter: FuelFilter; win: Window
+  chartRows: Record<string,any>[]; region: Region; filter: FuelFilter; win: TimeWindow
 }) {
   const present = BUCKETS.filter(b => chartRows.some(r => (r[b.key] ?? 0) > 0))
   const hasSpot = chartRows.some(r => r.spot != null && !isNaN(r.spot))
@@ -453,7 +455,7 @@ function Pills<T extends string>({ value, onChange, opts }: {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function BidsDashboard() {
   const [region,  setRegion]  = useState<Region>('NSW1')
-  const [win,     setWin]     = useState<Window>('7d')
+  const [win,     setWin]     = useState<TimeWindow>('7d')
   const [filter,  setFilter]  = useState<FuelFilter>('both')
   const [rows,    setRows]    = useState<any[]>([])
   const [loading, setLoading] = useState(true)
