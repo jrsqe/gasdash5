@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, BarChart, Cell, LineChart,
+  ComposedChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
+  Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -231,6 +231,103 @@ function bucketOf(p: number) {
   return '$1k+'
 }
 
+// ── Merit order bid stack ─────────────────────────────────────────────────────
+// For a given interval, extract each gas DUID's bid: price → MW
+// Returns segments sorted by price (merit order), each segment = one station bid
+interface MeritSegment {
+  station:   string   // display name
+  duid:      string
+  price:     number   // $/MWh
+  mw:        number   // MW offered at this price
+  cumMwFrom: number   // x-axis start
+  cumMwTo:   number   // x-axis end
+}
+
+function buildMeritOrder(row: any): MeritSegment[] {
+  // Collect all gas DUID bids from the row bands
+  const bids: { duid: string; station: string; price: number; mw: number }[] = []
+
+  for (const [key, val] of Object.entries(row) as [string, any][]) {
+    if (!key.startsWith('.$')) continue
+    const mw = Number(val)
+    if (!mw || mw <= 0 || !isFinite(mw)) continue
+    const parts = key.slice(2).split(',').map((s: string) => s.trim())
+    const price = parseFloat(parts[0])
+    if (isNaN(price)) continue
+    const duids = parts.slice(1).filter(Boolean)
+    const gasDuids = duids.filter(d => GAS_DUIDS.has(d))
+    if (!gasDuids.length) continue
+    // Split MW proportionally among gas DUIDs only
+    const mwPerDuid = mw * gasDuids.length / (duids.length || 1) / (gasDuids.length || 1)
+    for (const duid of gasDuids) {
+      bids.push({
+        duid,
+        station: DUID_STATION[duid] || duid,
+        price,
+        mw: Math.round(mwPerDuid),
+      })
+    }
+  }
+
+  // Sort by price ascending (merit order)
+  bids.sort((a, b) => a.price - b.price || a.station.localeCompare(b.station))
+
+  // Build cumulative MW (x-axis positions)
+  let cumMw = 0
+  return bids.map(b => {
+    const seg: MeritSegment = {
+      ...b,
+      cumMwFrom: cumMw,
+      cumMwTo:   cumMw + b.mw,
+    }
+    cumMw += b.mw
+    return seg
+  })
+}
+
+// Build merit order chart data — pick one interval per hour (or specific time)
+// Returns: array of { time, segments } for a time selector
+function buildMeritSnapshots(rows: any[]): Array<{ time: string; dateTime: string; segments: MeritSegment[] }> {
+  if (!rows.length) return []
+  // Sample every 12 rows = 1 hour
+  return rows
+    .filter((_, i) => i % 12 === 0)
+    .map(row => {
+      const dt = String(row.DateTime || '')
+      return {
+        time:     fmtDT(dt),
+        dateTime: dt,
+        segments: buildMeritOrder(row),
+      }
+    })
+    .filter(s => s.segments.length > 0)
+}
+
+// For the recharts bar chart: convert segments to a single row with station keys
+// Each station gets a key like "Colongra|0" (station|segmentIndex to handle multiple bids)
+interface MeritChartRow { [key: string]: any }
+
+function segmentsToChartRow(segments: MeritSegment[]): {
+  row: MeritChartRow
+  keys: string[]
+  stationKeys: Record<string, string>  // key → station name
+} {
+  const row: MeritChartRow = {}
+  const keys: string[]     = []
+  const stationKeys: Record<string, string> = {}
+  
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i]
+    const k   = `s${i}`
+    row[k]    = seg.mw
+    keys.push(k)
+    stationKeys[k] = seg.station
+    // Store price metadata for tooltip
+    row[`${k}_price`] = seg.price
+  }
+  return { row, keys, stationKeys }
+}
+
 // Chart 1: station bid prices over time (volume-weighted avg per station)
 function buildPriceRows(rows: any[], mode: FuelMode) {
   const stationSet = new Set<string>()
@@ -356,6 +453,7 @@ export default function BidsDashboard() {
   const [region,   setRegion]   = useState<NemRegion>('NSW1')
   const [mode,     setMode]     = useState<FuelMode>('both')
   const [rows,     setRows]     = useState<any[]>([])
+  const [selectedSnap, setSelectedSnap] = useState(0)
   const [psRows,   setPsRows]   = useState<any[]>([])
   const [psFrom,   setPsFrom]   = useState(() => {
     // Default: 3 weeks ago so Three Days period covers completed data
@@ -405,7 +503,7 @@ export default function BidsDashboard() {
         }
       }
       all.sort((a, b) => String(a.DateTime||'').localeCompare(String(b.DateTime||'')))
-      if (!cancelled) { setRows(all); setLoading(false); setProgress('') }
+      if (!cancelled) { setRows(all); setLoading(false); setProgress(''); setSelectedSnap(0) }
     }
 
     run().catch(e => { if (!cancelled) { setError(String(e?.message || e)); setLoading(false) } })
@@ -427,12 +525,11 @@ export default function BidsDashboard() {
   const { chartRows: priceRows, stations } = useMemo(
     () => buildPriceRows(rows, mode), [rows, mode]
   )
-  const stackRows   = useMemo(() => buildStackRows(rows, mode),   [rows, mode])
-  const stationAvgs = useMemo(() => buildStationAvgs(rows, mode), [rows, mode])
+  const stackRows      = useMemo(() => buildStackRows(rows, mode),      [rows, mode])
+  const stationAvgs    = useMemo(() => buildStationAvgs(rows, mode),    [rows, mode])
+  const meritSnapshots = useMemo(() => buildMeritSnapshots(rows),       [rows])
 
-  const presentBuckets = BUCKETS.filter(b => stackRows.some(r => (r[b.k] || 0) > 0))
-  const hasSpot        = stackRows.some(r => r.spot != null && isFinite(r.spot))
-  const fuelLabel      = mode === 'both' ? 'Gas & Coal' : mode === 'gas' ? 'Gas' : 'Coal'
+  const hasSpot = stackRows.some(r => r.spot != null && isFinite(r.spot))
 
   return (
     <div style={{ maxWidth:1400, margin:'0 auto', padding:'1.5rem' }}>
@@ -442,7 +539,7 @@ export default function BidsDashboard() {
           letterSpacing:'-0.02em', margin:0 }}>Generator Bids</h2>
         <p style={{ margin:'0.25rem 0 0', color:'var(--muted)',
           fontFamily:'var(--font-data)', fontSize:'0.65rem' }}>
-          NEOpoint · {fuelLabel} · {RLABEL[region]} · {fromDate} → {toDate}
+          NEOpoint · Gas generators · {RLABEL[region]} · {fromDate} → {toDate}
         </p>
       </div>
 
@@ -490,16 +587,7 @@ export default function BidsDashboard() {
           opts={PRESETS.map(p => ({ v: p.label, label: p.label }))}
         />
 
-        {/* Fuel */}
-        <Pills
-          value={mode}
-          onChange={v => setMode(v as FuelMode)}
-          opts={[
-            { v:'both', label:'Gas & Coal' },
-            { v:'gas',  label:'Gas' },
-            { v:'coal', label:'Coal' },
-          ]}
-        />
+
 
         {loading && (
           <span style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--muted)' }}>
@@ -524,108 +612,134 @@ export default function BidsDashboard() {
         </Card>
       )}
 
-      {/* ── Chart 1: Station bid prices ── */}
-      {priceRows.length > 0 && (
-        <Card>
-          <SectionHead
-            title={`${fuelLabel} Station Bid Prices · ${RLABEL[region]}`}
-            sub="volume-weighted avg bid price per station · 30-min sample"
-          />
-          <div style={{ display:'flex', flexWrap:'wrap', gap:'0.3rem 0.8rem', marginBottom:'0.75rem' }}>
-            {stations.map((s, i) => (
-              <span key={s} style={{ display:'flex', alignItems:'center', gap:'0.3rem',
-                fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--text)' }}>
-                <span style={{ width:9, height:9, borderRadius:9,
-                  background: STATION_COLOURS[i % STATION_COLOURS.length],
-                  display:'inline-block', flexShrink:0 }} />
-                {s}
-              </span>
-            ))}
-          </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={priceRows} margin={{ top:4, right:16, bottom:0, left:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="time"
-                tick={{ fill:'#555', fontSize:8, fontFamily:'var(--font-data)' }}
-                interval={Math.max(0, Math.floor(priceRows.length / 14) - 1)} />
-              <YAxis tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-                width={46} tickFormatter={(v: number) => `$${Math.round(v)}`} />
-              <Tooltip
-                contentStyle={{ background:'var(--surface)', border:'1px solid var(--border)',
-                  borderRadius:8, fontFamily:'var(--font-data)', fontSize:'0.65rem' }}
-                formatter={(v: any, name: string) => [`$${Number(v).toFixed(2)}/MWh`, name]}
-              />
-              {stations.map((s, i) => (
-                <Line key={s} type="monotone" dataKey={s}
-                  stroke={STATION_COLOURS[i % STATION_COLOURS.length]}
-                  strokeWidth={1.5} dot={false} connectNulls />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-      )}
+      {/* ── Gas merit order bid stack ── */}
+      {meritSnapshots.length > 0 && (() => {
+        const snap = meritSnapshots[selectedSnap] ?? meritSnapshots[0]
+        const { row, keys, stationKeys } = segmentsToChartRow(snap.segments)
+        const totalMw = snap.segments.reduce((s, seg) => s + seg.mw, 0)
+        const spotRow = stackRows.find(r => r.time === snap.time)
+        const spotPrice = spotRow?.spot
 
-      {/* ── Chart 2: Bid stack ── */}
-      {stackRows.length > 0 && (
-        <Card>
-          <SectionHead
-            title={`${fuelLabel} Bid Stack · ${RLABEL[region]}`}
-            sub="MW offered by price band · 30-min sample"
-          />
-          <div style={{ display:'flex', flexWrap:'wrap', gap:'0.3rem 0.8rem', marginBottom:'0.75rem' }}>
-            {presentBuckets.map(b => (
-              <span key={b.k} style={{ display:'flex', alignItems:'center', gap:'0.3rem',
-                fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--text)' }}>
-                <span style={{ width:9, height:9, borderRadius:2, background:b.col,
-                  display:'inline-block', flexShrink:0 }} />
-                {b.k}
-              </span>
-            ))}
-            {hasSpot && (
-              <span style={{ display:'flex', alignItems:'center', gap:'0.3rem',
-                fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)' }}>
-                <span style={{ width:16, height:0, borderTop:'2px dashed var(--muted)',
-                  display:'inline-block' }} />
-                Spot price
-              </span>
-            )}
-          </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={stackRows}
-              margin={{ top:4, right: hasSpot ? 48 : 16, bottom:0, left:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="time"
-                tick={{ fill:'#555', fontSize:8, fontFamily:'var(--font-data)' }}
-                interval={Math.max(0, Math.floor(stackRows.length / 12) - 1)} />
-              <YAxis yAxisId="mw" width={46}
-                tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-                tickFormatter={(v: number) => `${(v/1000).toFixed(1)}GW`} />
-              {hasSpot && (
-                <YAxis yAxisId="price" orientation="right" width={44}
-                  tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-                  tickFormatter={(v: number) => `$${Math.round(v)}`} />
-              )}
-              <Tooltip
-                contentStyle={{ background:'var(--surface)', border:'1px solid var(--border)',
-                  borderRadius:8, fontFamily:'var(--font-data)', fontSize:'0.65rem' }}
-                formatter={(v: any, name: string) =>
-                  name === 'spot'
-                    ? [`$${Number(v).toFixed(2)}/MWh`, 'Spot price']
-                    : [`${Number(v).toLocaleString()} MW`, name]}
+        // Unique stations for legend
+        const legendStations = Array.from(
+          new Set(snap.segments.map(s => s.station))
+        )
+
+        return (
+          <Card>
+            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between',
+              flexWrap:'wrap', gap:'0.75rem', marginBottom:'0.75rem' }}>
+              <SectionHead
+                title={`Gas Merit Order Bid Stack · ${RLABEL[region]}`}
+                sub={`${snap.time} · ${totalMw.toLocaleString()} MW total gas capacity offered`}
               />
-              {presentBuckets.map((b, i) => (
-                <Bar key={b.k} yAxisId="mw" dataKey={b.k} stackId="s" fill={b.col}
-                  radius={i === presentBuckets.length - 1 ? [2,2,0,0] : undefined} />
+              {/* Time selector */}
+              <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+                <button onClick={() => setSelectedSnap(s => Math.max(0, s - 1))}
+                  disabled={selectedSnap === 0}
+                  style={{ padding:'0.2rem 0.5rem', borderRadius:6, border:'1px solid var(--border)',
+                    background:'var(--surface)', color:'var(--text)', cursor:'pointer',
+                    fontFamily:'var(--font-ui)', fontSize:'0.72rem',
+                    opacity: selectedSnap === 0 ? 0.4 : 1 }}>‹</button>
+                <span style={{ fontFamily:'var(--font-data)', fontSize:'0.7rem',
+                  color:'var(--text)', minWidth:90, textAlign:'center' }}>
+                  {snap.time}
+                </span>
+                <button onClick={() => setSelectedSnap(s => Math.min(meritSnapshots.length - 1, s + 1))}
+                  disabled={selectedSnap === meritSnapshots.length - 1}
+                  style={{ padding:'0.2rem 0.5rem', borderRadius:6, border:'1px solid var(--border)',
+                    background:'var(--surface)', color:'var(--text)', cursor:'pointer',
+                    fontFamily:'var(--font-ui)', fontSize:'0.72rem',
+                    opacity: selectedSnap === meritSnapshots.length - 1 ? 0.4 : 1 }}>›</button>
+                <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)' }}>
+                  {selectedSnap + 1}/{meritSnapshots.length}
+                </span>
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div style={{ display:'flex', flexWrap:'wrap', gap:'0.3rem 0.8rem', marginBottom:'0.75rem' }}>
+              {legendStations.map(s => (
+                <span key={s} style={{ display:'flex', alignItems:'center', gap:'0.3rem',
+                  fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--text)' }}>
+                  <span style={{ width:9, height:9, borderRadius:2,
+                    background: stationColour(s), display:'inline-block', flexShrink:0 }} />
+                  {s}
+                </span>
               ))}
-              {hasSpot && (
-                <Line yAxisId="price" type="monotone" dataKey="spot" name="spot"
-                  stroke="rgba(255,255,255,0.55)" strokeWidth={1.5} strokeDasharray="4 3"
-                  dot={false} connectNulls />
+              {spotPrice != null && (
+                <span style={{ display:'flex', alignItems:'center', gap:'0.3rem',
+                  fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)',
+                  marginLeft:'auto' }}>
+                  Spot: <strong style={{ color:'var(--text)' }}>${spotPrice.toFixed(2)}/MWh</strong>
+                </span>
               )}
-            </ComposedChart>
-          </ResponsiveContainer>
-        </Card>
-      )}
+            </div>
+
+            {/* Merit order chart: X = cumulative MW, Y = price */}
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart
+                data={[row]}
+                layout="horizontal"
+                margin={{ top: 8, right: 16, bottom: 24, left: 0 }}
+                barCategoryGap={0}
+                barGap={0}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={true} vertical={false} />
+                <XAxis
+                  type="number"
+                  domain={[0, totalMw]}
+                  tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
+                  tickFormatter={(v: number) => `${v} MW`}
+                  label={{ value:'Cumulative MW →', position:'insideBottom', offset:-12,
+                    style:{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' } }}
+                />
+                <YAxis
+                  tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
+                  tickFormatter={(v: number) => `$${Math.round(v)}`}
+                  width={46}
+                  label={{ value:'$/MWh', angle:-90, position:'insideLeft',
+                    style:{ fill:'var(--muted)', fontSize:9, fontFamily:'var(--font-data)' } }}
+                />
+                <Tooltip
+                  contentStyle={{ background:'var(--surface)', border:'1px solid var(--border)',
+                    borderRadius:8, fontFamily:'var(--font-data)', fontSize:'0.65rem' }}
+                  formatter={(_: any, k: string) => {
+                    const seg = snap.segments[parseInt(k.slice(1))]
+                    if (!seg) return ['-', k]
+                    return [`${seg.mw} MW @ $${seg.price.toFixed(2)}/MWh`, seg.station]
+                  }}
+                />
+                {spotPrice != null && (
+                  <ReferenceLine
+                    y={spotPrice}
+                    stroke="rgba(255,255,255,0.6)"
+                    strokeDasharray="4 3"
+                    label={{ value:`Spot $${spotPrice.toFixed(0)}`, position:'right',
+                      style:{ fill:'var(--muted)', fontSize:8, fontFamily:'var(--font-data)' } }}
+                  />
+                )}
+                {keys.map(k => {
+                  const seg = snap.segments[parseInt(k.slice(1))]
+                  if (!seg) return null
+                  return (
+                    <Bar key={k} dataKey={k} stackId="merit"
+                      fill={stationColour(seg.station)}
+                      maxBarSize={9999}
+                    >
+                      <Cell fill={stationColour(seg.station)} />
+                    </Bar>
+                  )
+                })}
+              </ComposedChart>
+            </ResponsiveContainer>
+            <div style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)',
+              marginTop:'0.5rem' }}>
+              Each bar = one DUID bid · width = MW offered · height = bid price · use ‹ › to step through intervals
+            </div>
+          </Card>
+        )
+      })()}
 
       {/* ── Chart 3: Station avg MW ── */}
       {stationAvgs.length > 0 && (
