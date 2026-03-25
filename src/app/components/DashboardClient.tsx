@@ -6,52 +6,9 @@ import {
   Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useElecData } from './MainDashboard'
-import { INTERVAL_MAX_DAYS } from '@/lib/energyData'
 
 type IntervalOption  = '5m' | '1h' | '1d'
 type DateRangeOption = 'default' | '7d' | '3d' | '1d'
-
-// Maximum days the OE API can return per interval
-// Approximate limits based on API docs / typical data volume
-const INTERVAL_MAX_DAYS: Record<string, number> = {
-  '5m':  7,    // 5-min: ~7 days max before timeout
-  '1h':  365,  // 1-hr: up to ~1 year
-  '1d':  1825, // 1-day: 5 years+
-}
-
-// Quick preset periods for date picker
-const DATE_PRESETS = [
-  { label: '7 days',  days: 7  },
-  { label: '14 days', days: 14 },
-  { label: '1 month', days: 30 },
-  { label: '3 months',days: 90 },
-  { label: '6 months',days: 180},
-  { label: '1 year',  days: 365},
-]
-
-function isoDate(d: Date) { return d.toISOString().slice(0, 10) }
-function daysAgoIso(n: number) {
-  const d = new Date(); d.setUTCDate(d.getUTCDate() - n); return isoDate(d)
-}
-function todayIso() { return isoDate(new Date()) }
-
-function daysBetween(a: string, b: string): number {
-  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000)
-}
-
-// Clamp a date range to the API's max for the given interval.
-// Returns { from, to, clamped: true } if it was clamped, otherwise { from, to, clamped: false }
-function clampDateRange(from: string, to: string, interval: string): {
-  from: string; to: string; clamped: boolean; maxDays: number
-} {
-  const maxDays = INTERVAL_MAX_DAYS[interval] ?? 32
-  const days = daysBetween(from, to)
-  if (days <= maxDays) return { from, to, clamped: false, maxDays }
-  // Clamp: keep 'to', move 'from' forward
-  const newFrom = new Date(to)
-  newFrom.setUTCDate(newFrom.getUTCDate() - maxDays)
-  return { from: isoDate(newFrom), to, clamped: true, maxDays }
-}
 
 const FACILITY_COLOURS = [
   '#1B5E7B','#E8632A','#2E7D4F','#7B3FA0','#B5880C',
@@ -718,56 +675,23 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
 export default function DashboardClient({ hideHeader = false }: { hideHeader?: boolean }) {
   const [activeTab,  setActiveTab]  = useState<'NSW'|'VIC'|'QLD'|'SA'>('NSW')
   const [interval,   setInterval]   = useState<IntervalOption>('1h')
-  const [dateRange,  setDateRange]  = useState<DateRangeOption>('7d')
-  // Date range — default last 7 days
-  const [dateFrom,   setDateFrom]   = useState(() => daysAgoIso(7))
-  const [dateTo,     setDateTo]     = useState(() => todayIso())
+  const [dateRange,  setDateRange]  = useState<DateRangeOption>('default')
 
-  const { payload, loading, error, fetchedAt, fetch: fetchData } = useElecData(interval, dateFrom, dateTo)
+  const { payload, loading, error, fetchedAt, fetch: fetchData } = useElecData(interval)
 
   const INTERVAL_OPTIONS: {value: IntervalOption; label: string}[] = [
     { value:'5m', label:'5 min' }, { value:'1h', label:'1 hr' }, { value:'1d', label:'1 day' },
   ]
 
-  // Fetch on mount with default date range
+  // Fetch on mount with API default date range
   useEffect(() => {
-    fetchData(interval, dateFrom, dateTo)
+    fetchData(interval)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleInterval = (iv: IntervalOption) => {
     setInterval(iv)
-    // Re-clamp the current date range for the new interval's limit
-    const { from: cf, to: ct, clamped, maxDays } = clampDateRange(dateFrom, dateTo, iv)
-    if (clamped) {
-      setDateFrom(cf); setDateTo(ct)
-      setClampWarning(`Date range clamped to ${maxDays} days (max for ${iv} interval)`)
-      setTimeout(() => setClampWarning(null), 5000)
-      fetchData(iv, cf, ct, true)
-    } else {
-      setClampWarning(null)
-      fetchData(iv, dateFrom, dateTo, true)
-    }
-  }
-
-  const handleDateChange = (from: string, to: string) => {
-    const { from: cf, to: ct, clamped, maxDays } = clampDateRange(from, to, interval)
-    setDateFrom(cf); setDateTo(ct)
-    if (clamped) {
-      setClampWarning(`Date range clamped to ${maxDays} days (max for ${interval} interval)`)
-      setTimeout(() => setClampWarning(null), 5000)
-    } else {
-      setClampWarning(null)
-    }
-    fetchData(interval, cf, ct, true)
-  }
-
-  const [clampWarning, setClampWarning] = useState<string | null>(null)
-
-  const applyPreset = (days: number) => {
-    const from = daysAgoIso(days)
-    const to   = todayIso()
-    handleDateChange(from, to)
+    fetchData(iv, undefined, undefined, true)
   }
 
   const activeData = payload?.data?.[activeTab]
@@ -818,64 +742,8 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
           )}
           {loading && <span style={{ fontFamily:'var(--font-data)', fontSize:'0.65rem', color:'var(--accent)' }}>Loading…</span>}
           <PillGroup label="Interval" options={INTERVAL_OPTIONS} value={interval} onChange={handleInterval} disabled={loading} />
-          {/* Date range controls */}
-          <div style={{ display:'flex', alignItems:'center', gap:'0.4rem',
-            background:'var(--surface-2)', border:'1px solid var(--border)',
-            borderRadius:8, padding:'0.2rem 0.5rem' }}>
-            <input type="date" value={dateFrom} max={dateTo}
-              onChange={e => handleDateChange(e.target.value, dateTo)}
-              style={{ fontFamily:'var(--font-data)', fontSize:'0.68rem', color:'var(--text)',
-                background:'transparent', border:'none', outline:'none', cursor:'pointer' }} />
-            <span style={{ color:'var(--muted)', fontSize:'0.65rem' }}>→</span>
-            <input type="date" value={dateTo} min={dateFrom}
-              onChange={e => handleDateChange(dateFrom, e.target.value)}
-              style={{ fontFamily:'var(--font-data)', fontSize:'0.68rem', color:'var(--text)',
-                background:'transparent', border:'none', outline:'none', cursor:'pointer' }} />
-            <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'var(--muted)',
-              whiteSpace:'nowrap', paddingLeft:'0.2rem', borderLeft:'1px solid var(--border)' }}>
-              max {INTERVAL_MAX_DAYS[interval]}d
-            </span>
-          </div>
-          {/* Quick presets */}
-          <div style={{ display:'flex', gap:2, background:'var(--surface-2)',
-            border:'1px solid var(--border)', borderRadius:8, padding:2 }}>
-            {DATE_PRESETS.map(p => {
-              const exceedsLimit = p.days > (INTERVAL_MAX_DAYS[interval] ?? 32)
-              const isActive = dateFrom === daysAgoIso(p.days) && dateTo === todayIso()
-              return (
-                <button key={p.days}
-                  onClick={() => applyPreset(p.days)}
-                  disabled={loading}
-                  title={exceedsLimit
-                    ? `Exceeds ${INTERVAL_MAX_DAYS[interval]}d limit for ${interval} — will be auto-chunked`
-                    : undefined}
-                  style={{ padding:'0.2rem 0.5rem', borderRadius:6, border:'none',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    fontFamily:'var(--font-ui)', fontSize:'0.68rem',
-                    background: isActive ? 'var(--accent)' : 'transparent',
-                    color: isActive ? '#fff' : exceedsLimit ? 'var(--accent)' : 'var(--muted)',
-                    opacity: loading ? 0.4 : 1, transition:'all 0.15s',
-                    textDecoration: exceedsLimit ? 'none' : undefined,
-                    fontStyle: exceedsLimit ? 'italic' : undefined,
-                  }}>{p.label}{exceedsLimit ? '*' : ''}</button>
-              )
-            })}
-          </div>
         </div>
       </div>
-
-      {/* Clamp warning */}
-      {clampWarning && (
-        <div style={{
-          background: 'rgba(255, 159, 10, 0.12)', borderBottom: '1px solid rgba(255,159,10,0.3)',
-          padding: '0.35rem 1.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem',
-        }}>
-          <span style={{ fontFamily: 'var(--font-data)', fontSize: '0.68rem',
-            color: '#FF9F0A', fontWeight: 500 }}>
-            ⚠ {clampWarning}
-          </span>
-        </div>
-      )}
 
       {/* Latest data date banner */}
       {latestDataDate && !loading && (
@@ -907,7 +775,7 @@ export default function DashboardClient({ hideHeader = false }: { hideHeader?: b
         ) : activeData ? (
           <div style={{ opacity: loading ? 0.5 : 1, transition:'opacity 0.2s' }}>
             <RegionPanel
-              key={`${activeTab}-${interval}-${dateFrom}-${dateTo}`}
+              key={`${activeTab}-${interval}`}
               region={activeTab as 'NSW'|'VIC'|'QLD'|'SA'} data={activeData}
               dateRange={dateRange} onDateRangeChange={setDateRange}
 />

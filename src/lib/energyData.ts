@@ -11,11 +11,13 @@ const FIVE_MIN_PERIODS: Record<string, number> = {
 }
 
 // OE API maximum date range per interval (from docs.openelectricity.org.au/api-reference/data-limits)
+// Used server-side to chunk requests to the OE API.
 export const INTERVAL_MAX_DAYS: Record<string, number> = {
   '5m': 8,
   '1h': 32,
   '1d': 366,
 }
+
 
 export type IntervalOption = '5m' | '1h' | '1d'
 
