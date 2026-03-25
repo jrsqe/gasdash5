@@ -520,6 +520,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
 
   const summary = useMemo(() => computeSummary(visibleRows, facilities), [visibleRows, facilities])
   const chartRows = visibleRows.length > 500 ? visibleRows.filter((_: any, i: number) => i % 2 === 0) : visibleRows
+  const smartTicks = useMemo(() => elecSmartTicks(chartRows, dateRange), [chartRows, dateRange])
 
   const fmtLabel = (d: string) => { const [,mm,dd] = d.split(' ')[0].split('-'); return `${dd}/${mm}` }
 
@@ -584,10 +585,11 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis dataKey="datetime"
-              ticks={elecSmartTicks(chartRows, dateRange).ticks}
-              tickFormatter={elecSmartTicks(chartRows, dateRange).formatter}
-              tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-              tickLine={false} axisLine={{ stroke:'var(--border)' }} interval={0} />
+              ticks={smartTicks.ticks}
+              tickFormatter={smartTicks.formatter}
+              tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)', angle:-35, textAnchor:'end', dy:4 }}
+              tickLine={false} axisLine={{ stroke:'var(--border)' }} interval={0}
+              height={42} />
             <YAxis yAxisId="gen"
               tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={false} width={54} tickFormatter={v => `${v} MW`} />

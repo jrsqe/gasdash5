@@ -50,14 +50,14 @@ async function apiFetchChunked(
   params: Record<string, string>,
   maxDays: number
 ): Promise<any> {
-  const { date_min, date_max, ...baseParams } = params
-  // If no date_min at all, fall through with params as-is (API uses its own default)
-  if (!date_min) return apiFetch(url, params)
-  // If date_min is set but no date_max, no chunking needed — single request with just date_min
-  if (!date_max) return apiFetch(url, { ...baseParams, date_min })
+  const { date_start, date_end, ...baseParams } = params
+  // If no date_start at all, fall through with params as-is (API uses its own default)
+  if (!date_start) return apiFetch(url, params)
+  // If date_start is set but no date_end, no chunking needed — single request with just date_start
+  if (!date_end) return apiFetch(url, { ...baseParams, date_start })
 
-  const start  = new Date(date_min)
-  const end    = new Date(date_max)
+  const start  = new Date(date_start)
+  const end    = new Date(date_end)
   const chunks: { from: string; to: string }[] = []
 
   let cur = new Date(start)
@@ -78,7 +78,7 @@ async function apiFetchChunked(
   for (let i = 0; i < chunks.length; i += 3) {
     const batch = chunks.slice(i, i + 3)
     const results = await Promise.all(batch.map(c =>
-      apiFetch(url, { ...baseParams, date_min: c.from, date_max: c.to })
+      apiFetch(url, { ...baseParams, date_start: c.from, date_end: c.to })
     ))
     allResponses.push(...results)
   }
@@ -279,8 +279,8 @@ export async function fetchFuelMix(region: string, interval: string, dateParams:
 export async function getEnergyData({ interval, dateFrom, dateTo }: EnergyParams) {
   // Build date range params — dateFrom is always resolved by the API route
   const dateParams: Record<string, string> = {}
-  if (dateFrom) dateParams.date_min = dateFrom
-  if (dateTo)   dateParams.date_max = dateTo
+  if (dateFrom) dateParams.date_start = dateFrom
+  if (dateTo)   dateParams.date_end = dateTo
   const facilities = await fetchGasFacilities()
   const regionData: Record<string, any> = {}
 
