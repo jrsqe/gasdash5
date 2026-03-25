@@ -113,13 +113,15 @@ function elecSmartTicks(rows: any[], dateRange: string): {
 
   // Always explicitly sample ticks — never let recharts decide (causes crowding)
   const target = dateRange === 'default' ? 8 : dateRange === '7d' ? 7 : dateRange === '3d' ? 6 : 6
-  const n    = rows.length
-  const step = Math.max(1, Math.floor(n / (target - 1)))
+  const n = rows.length
+  const count = Math.min(target, n)
   const ticks: string[] = []
-  for (let i = 0; i < n; i += step) ticks.push(rows[i].datetime)
-  // Always include last point
-  const last = rows[n - 1].datetime
-  if (ticks[ticks.length - 1] !== last) ticks.push(last)
+  for (let i = 0; i < count; i++) {
+    // Evenly space indices from 0 to n-1, always hitting the last point exactly
+    const idx = i === count - 1 ? n - 1 : Math.round(i * (n - 1) / (count - 1))
+    const dt = rows[idx].datetime
+    if (ticks[ticks.length - 1] !== dt) ticks.push(dt)
+  }
 
   // Format: "All" view → "DD Mon YY", shorter views → "DD/MM HH:MM"
   const formatter = dateRange === 'default'
@@ -437,7 +439,9 @@ function FuelMixPanel({ fuelMix, dateRange, windowSize, windowEnd, onDateRangeCh
           <XAxis dataKey="datetime"
             ticks={tickDates} tickFormatter={tickFmt}
             tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
-            tickLine={false} axisLine={{ stroke:'var(--border)' }} interval={0} />
+            angle={-35} textAnchor="end" dy={4}
+            tickLine={false} axisLine={{ stroke:'var(--border)' }} interval={0}
+            height={42} />
           <YAxis tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}GW` : `${Math.round(v)} MW`}
             tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
             tickLine={false} axisLine={false} width={48} />
