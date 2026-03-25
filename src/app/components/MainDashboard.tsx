@@ -28,16 +28,23 @@ export function useElecData(interval: string, dateFrom?: string, dateTo?: string
   const [fetchedAt, setFetchedAt] = useState<number | null>(null)
 
   const fetch_ = useCallback(async (iv: string, from?: string, to?: string, force = false) => {
-    const cacheKey = `${iv}|${from ?? ''}|${to ?? ''}`
+    // Always resolve a dateFrom so the cache key is stable and the route gets a full range
+    const resolvedFrom = from ?? (() => {
+      const INTERVAL_MAX: Record<string, number> = { '5m': 8, '1h': 32, '1d': 366 }
+      const maxDays = INTERVAL_MAX[iv] ?? 32
+      const d = new Date()
+      d.setUTCDate(d.getUTCDate() - maxDays)
+      return d.toISOString().slice(0, 10)
+    })()
+    const cacheKey = `${iv}|${resolvedFrom}|${to ?? ''}`
     const cached = elecCache.get(cacheKey)
     if (!force && cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
       setPayload(cached.data); setFetchedAt(cached.fetchedAt); return
     }
     setLoading(true); setError(null)
     try {
-      const params = new URLSearchParams({ interval: iv })
-      if (from) params.set('from', from)
-      if (to)   params.set('to', to)
+      const params = new URLSearchParams({ interval: iv, from: resolvedFrom })
+      if (to) params.set('to', to)
       const res  = await fetch(`/api/energy?${params}`)
       const json = await res.json()
       if (!json.ok) throw new Error(json.error)
