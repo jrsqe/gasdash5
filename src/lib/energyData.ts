@@ -274,10 +274,18 @@ export async function fetchFuelMix(region: string, interval: string, dateParams:
 
 
 export async function getEnergyData({ interval, dateFrom, dateTo }: EnergyParams) {
-  // Build date range params if provided — OE API uses date_min/date_max
-  const dateParams: Record<string, string> = {}
-  if (dateFrom) dateParams.date_min = dateFrom
-  if (dateTo)   dateParams.date_max = dateTo
+  // Build date range params.
+  // If no dateFrom supplied, default to the full max range back from today
+  // (the API default is only half the max range, so we set it explicitly).
+  const maxDays = INTERVAL_MAX_DAYS[interval] ?? 32
+  const resolvedFrom = dateFrom ?? (() => {
+    const d = new Date()
+    d.setUTCDate(d.getUTCDate() - maxDays)
+    return d.toISOString().slice(0, 10)
+  })()
+
+  const dateParams: Record<string, string> = { date_min: resolvedFrom }
+  if (dateTo) dateParams.date_max = dateTo
   const facilities = await fetchGasFacilities()
   const regionData: Record<string, any> = {}
 
