@@ -51,7 +51,10 @@ async function apiFetchChunked(
   maxDays: number
 ): Promise<any> {
   const { date_min, date_max, ...baseParams } = params
-  if (!date_min || !date_max) return apiFetch(url, params)
+  // If no date_min at all, fall through with params as-is (API uses its own default)
+  if (!date_min) return apiFetch(url, params)
+  // If date_min is set but no date_max, no chunking needed — single request with just date_min
+  if (!date_max) return apiFetch(url, { ...baseParams, date_min })
 
   const start  = new Date(date_min)
   const end    = new Date(date_max)
