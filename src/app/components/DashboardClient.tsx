@@ -587,7 +587,8 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
             <XAxis dataKey="datetime"
               ticks={smartTicks.ticks}
               tickFormatter={smartTicks.formatter}
-              tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)', angle:-35, textAnchor:'end', dy:4 }}
+              tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
+              angle={-35} textAnchor="end" dy={4}
               tickLine={false} axisLine={{ stroke:'var(--border)' }} interval={0}
               height={42} />
             <YAxis yAxisId="gen"
