@@ -8,7 +8,7 @@ import {
 import { useElecData } from './MainDashboard'
 
 type IntervalOption  = '5m' | '1h' | '1d'
-type DateRangeOption = 'default' | '7d' | '3d' | '1d'
+type DateRangeOption = 'default' | '30d' | '7d' | '3d' | '1d'
 
 const FACILITY_COLOURS = [
   '#1B5E7B','#E8632A','#2E7D4F','#7B3FA0','#B5880C',
@@ -38,7 +38,7 @@ function filterRows(rows: Record<string,any>[], dateRange: DateRangeOption) {
   // Since we now fetch the exact date range from the API,
   // 'default' = show all fetched rows. Sub-filters still work for zooming in.
   if (dateRange === 'default' || rows.length === 0) return rows
-  const days    = dateRange === '7d' ? 7 : dateRange === '3d' ? 3 : 1
+  const days    = dateRange === '30d' ? 30 : dateRange === '7d' ? 7 : dateRange === '3d' ? 3 : 1
   const lastMs  = rowToMs(rows[rows.length - 1].datetime)
   const startMs = lastMs - days * 86400000
   return rows.filter(r => rowToMs(r.datetime) >= startMs)
@@ -112,7 +112,7 @@ function elecSmartTicks(rows: any[], dateRange: string): {
   if (rows.length === 0) return { ticks: [], formatter: tickFmt }
 
   // Always explicitly sample ticks — never let recharts decide (causes crowding)
-  const target = dateRange === 'default' ? 8 : dateRange === '7d' ? 7 : dateRange === '3d' ? 6 : 6
+  const target = dateRange === 'default' ? 8 : dateRange === '30d' ? 8 : dateRange === '7d' ? 7 : dateRange === '3d' ? 6 : 6
   const n = rows.length
   const count = Math.min(target, n)
   const ticks: string[] = []
@@ -508,7 +508,7 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
 
   const windowSize = useMemo(() => {
     if (dateRange === 'default' || rows.length === 0) return rows.length
-    const days = dateRange === '7d' ? 7 : dateRange === '3d' ? 3 : 1
+    const days = dateRange === '30d' ? 30 : dateRange === '7d' ? 7 : dateRange === '3d' ? 3 : 1
     const totalMs = rowToMs(rows[rows.length-1].datetime) - rowToMs(rows[0].datetime)
     const msPerRow = totalMs / (rows.length - 1 || 1)
     return Math.max(1, Math.round((days * 86400000) / msPerRow))
@@ -529,8 +529,8 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
   const fmtLabel = (d: string) => { const [,mm,dd] = d.split(' ')[0].split('-'); return `${dd}/${mm}` }
 
   const DATE_RANGE_OPTIONS: {value: DateRangeOption; label: string}[] = [
-    { value:'default', label:'Full' }, { value:'7d', label:'7d' },
-    { value:'3d', label:'3d' }, { value:'1d', label:'1d' },
+    { value:'default', label:'Full' }, { value:'30d', label:'30d' },
+    { value:'7d', label:'7d' }, { value:'3d', label:'3d' }, { value:'1d', label:'1d' },
   ]
 
   const REGION_COLOURS: Record<string,string> = { NSW:'#0071E3', VIC:'#30C254', QLD:'#FF9F0A', SA:'#AF52DE' }
@@ -596,9 +596,11 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
               tickLine={false} axisLine={{ stroke:'var(--border)' }} interval={0}
               height={42} />
             <YAxis yAxisId="gen"
+              domain={[0, 'auto']}
               tick={{ fill:'#555', fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={false} width={54} tickFormatter={v => `${v} MW`} />
             <YAxis yAxisId="price" orientation="right"
+              domain={['auto', 'auto']}
               tick={{ fill: PRICE_COLOUR, fontSize:9, fontFamily:'var(--font-data)' }}
               tickLine={false} axisLine={false} width={62} tickFormatter={v => `$${v}`} />
             <Tooltip content={<SqTooltip />} />

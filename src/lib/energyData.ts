@@ -252,7 +252,7 @@ export async function fetchFuelMix(region: string, interval: string, dateParams:
     }
   }
 
-  // Divide accumulated MWh totals by number of 5-min periods to get MW
+  // Divide accumulated totals by number of 5-min periods to get average MW per interval
   const divisor = FIVE_MIN_PERIODS[interval] ?? 1
   for (const grp of Object.keys(raw)) {
     for (const dt of Object.keys(raw[grp])) {
