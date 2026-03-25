@@ -11,6 +11,14 @@ import { INTERVAL_MAX_DAYS } from '@/lib/energyData'
 type IntervalOption  = '5m' | '1h' | '1d'
 type DateRangeOption = 'default' | '7d' | '3d' | '1d'
 
+// Maximum days the OE API can return per interval
+// Approximate limits based on API docs / typical data volume
+const INTERVAL_MAX_DAYS: Record<string, number> = {
+  '5m':  7,    // 5-min: ~7 days max before timeout
+  '1h':  365,  // 1-hr: up to ~1 year
+  '1d':  1825, // 1-day: 5 years+
+}
+
 // Quick preset periods for date picker
 const DATE_PRESETS = [
   { label: '7 days',  days: 7  },

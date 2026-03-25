@@ -315,7 +315,7 @@ export default function GpgProfileDashboard() {
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:'1rem', padding:'0.5rem 0' }}>
           {lastFetched && <span style={{ fontFamily:'var(--font-data)', fontSize:'0.62rem', color:'#5A5448' }}>Updated {lastFetched}</span>}
-          <button onClick={() => fetchData('1h', true)} disabled={loading} style={{
+          <button onClick={() => fetchData('1h', undefined, undefined, true)} disabled={loading} style={{
             padding:'0.3rem 0.75rem', border:'1px solid #D4D0C8', borderRadius:5, background:'transparent',
             cursor: loading ? 'not-allowed' : 'pointer', fontFamily:'var(--font-ui)', fontSize:'0.72rem', color:'#5A5448',
           }}>{loading ? 'Loading…' : 'Refresh'}</button>
