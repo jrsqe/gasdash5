@@ -51,10 +51,8 @@ async function apiFetchChunked(
   maxDays: number
 ): Promise<any> {
   const { date_start, date_end, ...baseParams } = params
-  // If no date_start at all, fall through with params as-is (API uses its own default)
-  if (!date_start) return apiFetch(url, params)
-  // If date_start is set but no date_end, no chunking needed — single request with just date_start
-  if (!date_end) return apiFetch(url, { ...baseParams, date_start })
+  // If either bound is missing fall through — caller (energy route) always provides both
+  if (!date_start || !date_end) return apiFetch(url, params)
 
   const start  = new Date(date_start)
   const end    = new Date(date_end)
