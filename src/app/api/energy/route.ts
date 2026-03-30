@@ -8,18 +8,13 @@ export async function GET(req: NextRequest) {
   const interval = (searchParams.get('interval') ?? '1h') as IntervalOption
   const maxDays  = INTERVAL_MAX_DAYS[interval] ?? 32
 
-  // Use yesterday as the default date_end — the OE API only has data up to the last
-  // completed interval, so sending today's date returns a 416 "no data" error.
-  const yesterday = (() => {
-    const d = new Date()
-    d.setUTCDate(d.getUTCDate() - 1)
-    return isoDate(d)
-  })()
-
-  const dateTo   = searchParams.get('to')   ?? yesterday
+  // Don't send date_end — the API defaults it to the last completed interval,
+  // which avoids 416 errors when today has no data yet.
+  // Fetch one day less than the max range to stay safely within limits.
+  const dateTo   = searchParams.get('to') ?? undefined
   const dateFrom = searchParams.get('from') ?? (() => {
-    const d = new Date(dateTo)
-    d.setUTCDate(d.getUTCDate() - maxDays)
+    const d = new Date()
+    d.setUTCDate(d.getUTCDate() - (maxDays - 1))
     return isoDate(d)
   })()
 

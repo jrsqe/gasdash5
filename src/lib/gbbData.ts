@@ -385,18 +385,18 @@ export async function getGbbData(): Promise<GbbTimeseries> {
     return obj[key] as (number | null)[]
   }
 
-  // ── GPG demand: BBGPG, NSW + VIC ──
+  // ── GPG demand: BBGPG, all states ──
   const gpgByState: GbbTimeseries['gpgByState'] = {}
-  for (const row of rows.filter(r => r.FacilityType === 'BBGPG' && ['NSW', 'VIC'].includes(r.State))) {
+  for (const row of rows.filter(r => r.FacilityType === 'BBGPG' && ['NSW', 'VIC', 'SA', 'QLD'].includes(r.State))) {
     if (!gpgByState[row.State]) gpgByState[row.State] = {}
     const arr = ensureArr(gpgByState[row.State], row.FacilityName, recentDates.length)
     const i   = recentDates.indexOf(row.GasDate)
     if (i >= 0) arr[i] = (arr[i] ?? 0) + (row.Demand ?? 0)
   }
 
-  // ── Large industry demand: BBLARGE, NSW + VIC ──
+  // ── Large industry demand: BBLARGE, all states ──
   const largeByState: GbbTimeseries['largeByState'] = {}
-  for (const row of rows.filter(r => r.FacilityType === 'BBLARGE' && ['NSW', 'VIC'].includes(r.State))) {
+  for (const row of rows.filter(r => r.FacilityType === 'BBLARGE' && ['NSW', 'VIC', 'SA', 'QLD'].includes(r.State))) {
     if (!largeByState[row.State]) largeByState[row.State] = {}
     const arr = ensureArr(largeByState[row.State], row.FacilityName, recentDates.length)
     const i   = recentDates.indexOf(row.GasDate)
@@ -412,9 +412,9 @@ export async function getGbbData(): Promise<GbbTimeseries> {
     if (i >= 0) arr[i] = (arr[i] ?? 0) + (row.Supply ?? 0)
   }
 
-  // ── Storage: STOR, NSW + VIC + SA ──
+  // ── Storage: STOR, all states ──
   const storageByFacility: GbbTimeseries['storageByFacility'] = {}
-  for (const row of rows.filter(r => r.FacilityType === 'STOR' && ['NSW', 'VIC', 'SA'].includes(r.State))) {
+  for (const row of rows.filter(r => r.FacilityType === 'STOR' && ['NSW', 'VIC', 'SA', 'QLD'].includes(r.State))) {
     if (!storageByFacility[row.FacilityName]) {
       storageByFacility[row.FacilityName] = {
         state:         row.State,

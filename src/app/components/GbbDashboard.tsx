@@ -565,7 +565,7 @@ function StoragePanel({ dates, storageByFacility }: {
 }) {
   const facilities  = Object.keys(storageByFacility).sort()
   const stateOf     = (f:string) => storageByFacility[f]?.state ?? ''
-  const stateGroups = ['NSW','VIC','SA'].filter(s => facilities.some(f => stateOf(f) === s))
+  const stateGroups = ['NSW','VIC','SA','QLD'].filter(s => facilities.some(f => stateOf(f) === s))
   const [state,  setState]  = useState(stateGroups[0] ?? 'VIC')
   const [metric, setMetric] = useState<'level'|'flow'>('level')
   const [range,  setRange]  = useState<DateRangeOption>('all')
