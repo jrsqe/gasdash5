@@ -523,7 +523,15 @@ function RegionPanel({ region, data, dateRange, onDateRangeChange }: {
   }, [rows, dateRange, windowSize, windowEnd])
 
   const summary = useMemo(() => computeSummary(visibleRows, facilities), [visibleRows, facilities])
-  const chartRows = visibleRows.length > 500 ? visibleRows.filter((_: any, i: number) => i % 2 === 0) : visibleRows
+  const chartRows = useMemo(() => {
+    const base = visibleRows.length > 500 ? visibleRows.filter((_: any, i: number) => i % 2 === 0) : visibleRows
+    // Clamp generation values to >= 0 — negative values from the API cause the y-axis to dip below zero
+    return base.map((r: any) => {
+      const clamped: Record<string, any> = { datetime: r.datetime, price: r.price }
+      for (const f of facilities) clamped[f] = r[f] != null ? Math.max(0, r[f]) : null
+      return clamped
+    })
+  }, [visibleRows, facilities])
   const smartTicks = useMemo(() => elecSmartTicks(chartRows, dateRange), [chartRows, dateRange])
 
   const fmtLabel = (d: string) => { const [,mm,dd] = d.split(' ')[0].split('-'); return `${dd}/${mm}` }

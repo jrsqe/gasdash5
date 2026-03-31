@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Area
@@ -281,6 +281,199 @@ function SttmPanel({ sttm, hub, gbbDate }: { sttm: SttmDay[]; hub: SttmHub; gbbD
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
+// ── Transactions hook ──────────────────────────────────────────────────────────
+let txCache: { data: any; fetchedAt: number } | null = null
+
+function useTransactions() {
+  const [data,    setData]    = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
+
+  useEffect(() => {
+    if (txCache && Date.now() - txCache.fetchedAt < 60 * 60 * 1000) {
+      setData(txCache.data); return
+    }
+    setLoading(true)
+    fetch('/api/gastransactions')
+      .then(r => r.json())
+      .then(j => {
+        if (!j.ok) throw new Error(j.error)
+        txCache = { data: j.data, fetchedAt: Date.now() }
+        setData(j.data)
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  return { data, loading, error }
+}
+
+// ── Shared table styles ────────────────────────────────────────────────────────
+const TH: React.CSSProperties = {
+  fontFamily: 'var(--font-data)', fontSize: '0.6rem', fontWeight: 700,
+  color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em',
+  padding: '0.4rem 0.6rem', textAlign: 'left', whiteSpace: 'nowrap',
+  borderBottom: '1px solid var(--border)', background: 'var(--surface-2)',
+  position: 'sticky', top: 0,
+}
+const TD: React.CSSProperties = {
+  fontFamily: 'var(--font-data)', fontSize: '0.68rem', color: 'var(--text)',
+  padding: '0.35rem 0.6rem', borderBottom: '1px solid var(--border)',
+  whiteSpace: 'nowrap',
+}
+
+const STATE_COLOURS: Record<string, string> = {
+  NSW: '#0071E3', VIC: '#30C254', QLD: '#FF9F0A', SA: '#AF52DE',
+  TAS: '#5AC8FA', NT: '#FF6B35',
+}
+
+function StateBadge({ state }: { state: string }) {
+  return (
+    <span style={{
+      display: 'inline-block', padding: '1px 6px', borderRadius: 4,
+      fontFamily: 'var(--font-data)', fontSize: '0.6rem', fontWeight: 700,
+      background: STATE_COLOURS[state] ?? '#888', color: '#fff',
+      letterSpacing: '0.03em',
+    }}>{state}</span>
+  )
+}
+
+// ── Normalise a row to a display-friendly key→value list ─────────────────────
+function normaliseKeys(obj: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === '_state') continue
+    const pretty = k.replace(/_/g, ' ').replace(/\w/g, c => c.toUpperCase())
+    out[pretty] = v
+  }
+  return out
+}
+
+// ── Generic transaction table ─────────────────────────────────────────────────
+function TxTable({ rows, stateCol }: { rows: Record<string,string>[]; stateCol?: boolean }) {
+  const [filter, setFilter] = useState<string>('ALL')
+  const states = useMemo(() => {
+    const s = new Set(rows.map(r => r._state).filter(Boolean))
+    return ['ALL', ...Array.from(s).sort()]
+  }, [rows])
+
+  const visible = useMemo(() =>
+    filter === 'ALL' ? rows : rows.filter(r => r._state === filter),
+    [rows, filter]
+  )
+
+  if (!rows.length) return (
+    <div style={{ padding: '1.5rem', color: 'var(--muted)', fontFamily: 'var(--font-data)', fontSize: '0.72rem', textAlign: 'center' }}>
+      No data available
+    </div>
+  )
+
+  // Build display columns from first row (excluding _state)
+  const firstRow = normaliseKeys(rows[0])
+  const cols = Object.keys(firstRow)
+
+  return (
+    <div>
+      {stateCol && states.length > 2 && (
+        <div style={{ display: 'flex', gap: 4, marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+          {states.map(s => (
+            <button key={s} onClick={() => setFilter(s)} style={{
+              padding: '0.2rem 0.55rem', borderRadius: 5, border: 'none', cursor: 'pointer',
+              fontFamily: 'var(--font-data)', fontSize: '0.65rem', fontWeight: s === filter ? 700 : 400,
+              background: s === filter ? (STATE_COLOURS[s] ?? 'var(--accent)') : 'var(--surface-2)',
+              color: s === filter ? '#fff' : 'var(--muted)',
+              transition: 'all 0.12s',
+            }}>{s}</button>
+          ))}
+        </div>
+      )}
+      <div style={{ maxHeight: 340, overflowY: 'auto', borderRadius: 8, border: '1px solid var(--border)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              {stateCol && <th style={TH}>State</th>}
+              {cols.map(c => <th key={c} style={TH}>{c}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row, i) => {
+              const display = normaliseKeys(row)
+              return (
+                <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
+                  {stateCol && <td style={TD}><StateBadge state={row._state ?? ''} /></td>}
+                  {cols.map(c => <td key={c} style={TD}>{display[c] ?? ''}</td>)}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: '0.4rem', fontFamily: 'var(--font-data)', fontSize: '0.58rem', color: 'var(--muted)' }}>
+        {visible.length} transaction{visible.length !== 1 ? 's' : ''}
+        {filter !== 'ALL' ? ` in ${filter}` : ''}
+      </div>
+    </div>
+  )
+}
+
+// ── Transactions panel ────────────────────────────────────────────────────────
+function TransactionsPanel() {
+  const { data, loading, error } = useTransactions()
+  const [tab, setTab] = useState<'shortterm' | 'swaps' | 'lng'>('shortterm')
+
+  const tabs: { key: typeof tab; label: string }[] = [
+    { key: 'shortterm', label: 'Short-Term Transactions' },
+    { key: 'swaps',     label: 'Swap Transactions' },
+    { key: 'lng',       label: 'LNG Transactions' },
+  ]
+
+  return (
+    <div className="sq-card" style={{ padding: '1.5rem' }}>
+      <div style={{ marginBottom: '1rem' }}>
+        <h3 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)', margin: '0 0 0.25rem' }}>
+          Recent Gas Transactions
+        </h3>
+        <p style={{ margin: 0, fontFamily: 'var(--font-data)', fontSize: '0.62rem', color: 'var(--muted)' }}>
+          AEMO Gas Bulletin Board · nemweb.com.au
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            padding: '0.4rem 1rem', border: 'none', background: 'transparent', cursor: 'pointer',
+            fontFamily: 'var(--font-ui)', fontSize: '0.78rem',
+            fontWeight: t.key === tab ? 600 : 400,
+            color: t.key === tab ? 'var(--accent)' : 'var(--muted)',
+            borderBottom: t.key === tab ? '2px solid var(--accent)' : '2px solid transparent',
+            marginBottom: -1, transition: 'all 0.15s',
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {loading && (
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--muted)', fontFamily: 'var(--font-data)', fontSize: '0.72rem' }}>
+          Loading transactions…
+        </div>
+      )}
+      {error && (
+        <div style={{ color: 'var(--negative)', fontFamily: 'var(--font-data)', fontSize: '0.72rem' }}>
+          Error: {error}
+        </div>
+      )}
+      {data && !loading && (
+        <>
+          {tab === 'shortterm' && <TxTable rows={data.shortTerm ?? []} stateCol />}
+          {tab === 'swaps'     && <TxTable rows={data.swaps     ?? []} stateCol />}
+          {tab === 'lng'       && <TxTable rows={data.lng       ?? []} stateCol={false} />}
+        </>
+      )}
+    </div>
+  )
+}
+
+
 export default function GasPriceDashboard({ gbbMostRecentDate }: { gbbMostRecentDate?: string }) {
   const { data, loading, error, fetchedAt, load } = useGasPrices()
   const [gbbDate, setGbbDate] = useState(gbbMostRecentDate ?? '')
@@ -361,6 +554,8 @@ export default function GasPriceDashboard({ gbbMostRecentDate }: { gbbMostRecent
                 <SttmPanel sttm={sttmAde} hub="ADE" gbbDate={effectiveGbbDate} />
               </div>
             </div>
+
+            <TransactionsPanel />
 
             <div style={{ fontFamily: 'var(--font-data)', fontSize: '0.6rem', color: '#5A5448' }}>
               DWGM: {dwgm[0]?.label} – {dwgm[dwgm.length-1]?.label} ({dwgm.length} days) ·
