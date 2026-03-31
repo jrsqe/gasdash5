@@ -43,28 +43,47 @@ async function fetchCsv(url: string): Promise<Record<string, string>[]> {
   } catch { return [] }
 }
 
+// ── Sort rows by most recent date first ───────────────────────────────────────
+function sortByDateDesc(rows: Record<string, string>[], dateKey: string): Record<string, string>[] {
+  if (!rows.length) return rows
+  return [...rows].sort((a, b) => {
+    const av = a[dateKey] ?? ''
+    const bv = b[dateKey] ?? ''
+    return bv.localeCompare(av)  // descending — later dates sort first
+  })
+}
+
 export const revalidate = 3600
 
 export async function GET() {
   try {
     // ── LNG transactions ──────────────────────────────────────────────────────
-    const lngRows = await fetchCsv(`${BASE}/GasBBLNGTransactions.csv`)
+    const lngRows = sortByDateDesc(
+      await fetchCsv(`${BASE}/GasBBLNGTransactions.csv`),
+      'supplystartdate'
+    )
 
     // ── Short-term transactions (all states) ──────────────────────────────────
-    const stRows = (await Promise.all(
-      STATES.map(async s => {
-        const rows = await fetchCsv(`${BASE}/GasBBShortTermTransactions${s}.CSV`)
-        return rows.map(r => ({ ...r, _state: s }))
-      })
-    )).flat()
+    const stRows = sortByDateDesc(
+      (await Promise.all(
+        STATES.map(async s => {
+          const rows = await fetchCsv(`${BASE}/GasBBShortTermTransactions${s}.CSV`)
+          return rows.map(r => ({ ...r, _state: s }))
+        })
+      )).flat(),
+      'supplyperiodstart'
+    )
 
     // ── Short-term swap transactions (all states) ─────────────────────────────
-    const swapRows = (await Promise.all(
-      STATES.map(async s => {
-        const rows = await fetchCsv(`${BASE}/GasBBShortTermSwapTransactions${s}.CSV`)
-        return rows.map(r => ({ ...r, _state: s }))
-      })
-    )).flat()
+    const swapRows = sortByDateDesc(
+      (await Promise.all(
+        STATES.map(async s => {
+          const rows = await fetchCsv(`${BASE}/GasBBShortTermSwapTransactions${s}.CSV`)
+          return rows.map(r => ({ ...r, _state: s }))
+        })
+      )).flat(),
+      'supplyperiodstart'
+    )
 
     return NextResponse.json({ ok: true, data: { lng: lngRows, shortTerm: stRows, swaps: swapRows } })
   } catch (err: any) {
