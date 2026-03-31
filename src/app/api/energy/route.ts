@@ -1,22 +1,16 @@
 import { NextResponse, NextRequest } from 'next/server'
-import { getEnergyData, IntervalOption, INTERVAL_MAX_DAYS } from '@/lib/energyData'
-
-function isoDate(d: Date) { return d.toISOString().slice(0, 10) }
+import { getEnergyData, IntervalOption } from '@/lib/energyData'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const interval = (searchParams.get('interval') ?? '1h') as IntervalOption
-  const maxDays  = INTERVAL_MAX_DAYS[interval] ?? 32
 
-  // Don't send date_end — the API defaults it to the last completed interval,
-  // which avoids 416 errors when today has no data yet.
-  // Fetch one day less than the max range to stay safely within limits.
-  const dateTo   = searchParams.get('to') ?? undefined
-  const dateFrom = searchParams.get('from') ?? (() => {
-    const d = new Date()
-    d.setUTCDate(d.getUTCDate() - (maxDays - 1))
-    return isoDate(d)
-  })()
+  // Pass dates only if explicitly provided by the caller.
+  // When omitted, the OE API uses its own defaults:
+  //   date_end   → last completed interval
+  //   date_start → half the max range before date_end
+  const dateFrom = searchParams.get('from') ?? undefined
+  const dateTo   = searchParams.get('to')   ?? undefined
 
   try {
     const data = await getEnergyData({ interval, dateFrom, dateTo })
