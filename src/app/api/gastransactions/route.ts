@@ -23,7 +23,8 @@ function splitCsvLine(line: string): string[] {
 function parseCsv(text: string): { headers: string[]; rows: string[][] } {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
   if (lines.length < 2) return { headers: [], rows: [] }
-  const headers = splitCsvLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, '_'))
+  // Lowercase and strip spaces — but keep original capitalisation accessible via raw headers
+  const headers = splitCsvLine(lines[0]).map(h => h.trim().toLowerCase().replace(/\s+/g, ''))
   const rows    = lines.slice(1).map(l => splitCsvLine(l))
   return { headers, rows }
 }
@@ -43,27 +44,44 @@ async function fetchCsv(url: string): Promise<Record<string, string>[]> {
   } catch { return [] }
 }
 
-// ── Sort rows by most recent date first ───────────────────────────────────────
+// ── Convert any AEMO date format to a sortable timestamp ─────────────────────
+// Handles: "YYYY/MM/DD", "YYYY-MM-DD", "DD/MM/YYYY", all optionally with " HH:MM" suffix
+function toSortable(val: string): number {
+  const s = val.trim()
+  if (!s) return 0
+  // Split off optional time part
+  const [datePart, timePart] = s.split(' ')
+  const [a, b, c] = (datePart ?? '').split(/[\/\-]/)
+  let iso: string
+  if ((a?.length ?? 0) === 4) {
+    // YYYY/MM/DD or YYYY-MM-DD
+    iso = `${a}-${b}-${c}`
+  } else {
+    // DD/MM/YYYY
+    iso = `${c}-${b}-${a}`
+  }
+  const full = timePart ? `${iso}T${timePart}:00` : iso
+  const ts = Date.parse(full)
+  return isNaN(ts) ? 0 : ts
+}
+
+// ── Sort rows by most recent supply period first ───────────────────────────────
 function sortByDateDesc(rows: Record<string, string>[], dateKey: string): Record<string, string>[] {
   if (!rows.length) return rows
-  return [...rows].sort((a, b) => {
-    const av = a[dateKey] ?? ''
-    const bv = b[dateKey] ?? ''
-    return bv.localeCompare(av)  // descending — later dates sort first
-  })
+  return [...rows].sort((a, b) => toSortable(b[dateKey] ?? '') - toSortable(a[dateKey] ?? ''))
 }
 
 export const revalidate = 3600
 
 export async function GET() {
   try {
-    // ── LNG transactions ──────────────────────────────────────────────────────
+    // ── LNG transactions — sort by SupplyStartDate ────────────────────────────
     const lngRows = sortByDateDesc(
       await fetchCsv(`${BASE}/GasBBLNGTransactions.csv`),
       'supplystartdate'
     )
 
-    // ── Short-term transactions (all states) ──────────────────────────────────
+    // ── Short-term transactions — sort by SupplyPeriodStart ───────────────────
     const stRows = sortByDateDesc(
       (await Promise.all(
         STATES.map(async s => {
@@ -74,7 +92,7 @@ export async function GET() {
       'supplyperiodstart'
     )
 
-    // ── Short-term swap transactions (all states) ─────────────────────────────
+    // ── Short-term swap transactions — sort by SupplyPeriodStart ──────────────
     const swapRows = sortByDateDesc(
       (await Promise.all(
         STATES.map(async s => {
