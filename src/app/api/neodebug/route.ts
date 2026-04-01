@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const NEO_KEY = process.env.NEO_KEY ?? 'squshe10'
+const NEO_KEY = process.env.NEO_KEY
 const BASE    = 'https://www.neopoint.com.au/Service/Json'
 
 export async function GET() {

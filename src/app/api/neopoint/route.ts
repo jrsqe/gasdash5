@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server'
 
 const NEO_BASE = 'https://www.neopoint.com.au/Service/Json'
-const NEO_KEY  = process.env.NEO_KEY 
+const NEO_KEY  = process.env.NEO_KEY
 
 // Simple in-memory cache
 const cache = new Map<string, { data: any; at: number }>()
@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
   const period    = searchParams.get('period') ?? 'Daily'
   const section   = searchParams.get('section') ?? '-1'
 
+  if (!NEO_KEY) return NextResponse.json({ ok: false, error: 'NEO_KEY environment variable not set' }, { status: 500 })
   if (!report) return NextResponse.json({ ok: false, error: 'Missing report' }, { status: 400 })
 
   const cacheKey = `${report}|${from}|${instances}|${period}|${section}`
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
 
   await acquireSlot()
   try {
-    const qs = new URLSearchParams({ f: report, from, period, instances, section, key: NEO_KEY })
+    const qs = new URLSearchParams({ f: report, from, period, instances, section, key: NEO_KEY! })
     const res = await fetch(`${NEO_BASE}?${qs}`, {
       cache: 'no-store',
       signal: AbortSignal.timeout(20000),
