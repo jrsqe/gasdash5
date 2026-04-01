@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server'
 
 const NEO_BASE = 'https://www.neopoint.com.au/Service/Json'
-const NEO_KEY  = process.env.NEO_KEY ?? 'squshe10'
+const NEO_KEY  = process.env.NEO_KEY 
 
 // Simple in-memory cache
 const cache = new Map<string, { data: any; at: number }>()
