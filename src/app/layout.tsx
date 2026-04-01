@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Squadron Energy — Market Dashboard',
+  title: 'Market Dashboard',
   description: 'Gas & electricity market intelligence for eastern Australia',
 }
 
