@@ -102,9 +102,6 @@ export default function MainDashboard() {
             <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: '0.88rem', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
               Gas Dashboard
             </div>
-            <div style={{ color: 'var(--muted)', fontSize: '0.6rem', fontFamily: 'var(--font-data)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              Squadron Energy
-            </div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
